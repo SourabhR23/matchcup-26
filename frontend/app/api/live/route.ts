@@ -113,7 +113,7 @@ export async function GET() {
        (90 min match + 45 min grace period).
     ─────────────────────────────────────────────────────────────────── */
     const soonIds  = new Set(soonEvents.map((e) => (e as Record<string, unknown>).id as number))
-    const ftCutoff = new Date(now.getTime() - 135 * 60 * 1000)  // 135 min ago
+    const ftCutoff = new Date(now.getTime() - 115 * 60 * 1000)  // 115 min ago (~20 min post-FT)
 
     const { data: ftRows } = await supabaseServer
       .from('matches')
@@ -145,7 +145,46 @@ export async function GET() {
         just_finished:  true,
       }))
 
-    const allEvents = [...liveEventsWithGoals, ...ftEvents, ...soonEvents]
+    /* ── Gap coverage ──────────────────────────────────────────────────────
+       Match kicked off 100–115 min ago, no longer in BSD live, but
+       Supabase status not yet 'finished' (pipeline delay up to 5 min).
+       Show as FT using time-based detection instead of status.
+    ─────────────────────────────────────────────────────────────────── */
+    const ftIds    = new Set(ftEvents.map((e) => (e as Record<string, unknown>).id as number))
+    const gapStart = new Date(now.getTime() - 115 * 60 * 1000)
+    const gapEnd   = new Date(now.getTime() - 100 * 60 * 1000)
+
+    const { data: gapRows } = await supabaseServer
+      .from('matches')
+      .select('*')
+      .neq('status', 'finished')
+      .gte('event_date', gapStart.toISOString())
+      .lte('event_date', gapEnd.toISOString())
+
+    const gapEvents: Record<string, unknown>[] = (gapRows ?? [])
+      .filter((r) => !liveIds.has(r.id) && !soonIds.has(r.id) && !ftIds.has(r.id))
+      .map((r) => ({
+        id:             r.id,
+        home_team:      r.home_team_name ?? '',
+        away_team:      r.away_team_name ?? '',
+        home_team_id:   r.home_team_id,
+        away_team_id:   r.away_team_id,
+        home_score:     r.home_score ?? 0,
+        away_score:     r.away_score ?? 0,
+        home_score_ht:  r.home_score_ht ?? 0,
+        away_score_ht:  r.away_score_ht ?? 0,
+        current_minute: null,
+        period:         'finished',
+        status:         'finished',
+        group_name:     r.group_name ?? '',
+        round_name:     r.round_name ?? '',
+        event_date:     r.event_date,
+        goal_scorers:   [],
+        starting_soon:  false,
+        just_finished:  true,
+      }))
+
+    const allEvents = [...liveEventsWithGoals, ...ftEvents, ...gapEvents, ...soonEvents]
 
     return NextResponse.json({ count: allEvents.length, events: allEvents })
   } catch {

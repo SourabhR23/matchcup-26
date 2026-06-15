@@ -140,10 +140,12 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
     if isinstance(away_coach, str): away_coach = {'name': away_coach}
 
     # ── 1. matches ──
-    upsert('matches', [{
+    db_status = 'finished' if status in FINISHED else status
+
+    match_row = {
         'id':               event_id,
         'event_date':       detail.get('event_date'),
-        'status':           'finished',
+        'status':           db_status,
         'round_name':       nv(detail.get('round_name')),
         'round_number':     ni(detail.get('round_number')),
         'group_name':       nv(detail.get('group_name')),
@@ -167,7 +169,21 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         'attendance':       ni(detail.get('attendance')),
         'temperature_c':    nf(weather.get('temperature_c') or detail.get('temperature_c')),
         'wind_speed':       nf(weather.get('wind_speed') or detail.get('wind_speed')),
-    }], 'id')
+    }
+    try:
+        sb.table('matches').upsert([match_row], on_conflict='id').execute()
+        print(f'    OK  matches — 1 row(s)')
+    except Exception as e:
+        if '23503' in str(e) or 'referee_id' in str(e):
+            # referee not in referees table — retry without FK field
+            match_row['referee_id'] = None
+            try:
+                sb.table('matches').upsert([match_row], on_conflict='id').execute()
+                print(f'    OK  matches — 1 row(s) (referee_id cleared)')
+            except Exception as e2:
+                print(f'    ERR matches — {e2}')
+        else:
+            print(f'    ERR matches — {e}')
     time.sleep(DELAY)
 
     # ── 2. player_match_stats ──
@@ -332,6 +348,7 @@ def run_cron():
         time.sleep(0.3)
 
     print(f'\nCron done. Collected {collected} event(s).')
+    return collected
 
 
 # ── Serve mode: long-running web service for Render free tier ────────────────
@@ -353,8 +370,9 @@ def run_serve(interval: int = 300):
         while True:
             try:
                 print(f'\n[scheduler] Starting collection …')
-                run_cron()
+                n = run_cron()
                 last_run['time'] = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+                last_run['collected'] = n
             except Exception as e:
                 print(f'[scheduler] ERROR: {e}')
             print(f'[scheduler] Sleeping {interval}s until next run …\n')
