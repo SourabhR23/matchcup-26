@@ -450,10 +450,26 @@ export default async function MatchDetailPage({ params }: Params) {
           ? `Round ${ev.round_number}${ev.group_name ? ` · ${ev.group_name}` : ''}`
           : (ev.group_name || ev.round_name || null)}
         prediction={prediction ? {
-          probHomeWin:    prediction.prob_home_win,
-          probDraw:       prediction.prob_draw,
-          probAwayWin:    prediction.prob_away_win,
-          mostLikelyScore: prediction.most_likely_score,
+          probHomeWin:        prediction.prob_home_win,
+          probDraw:           prediction.prob_draw,
+          probAwayWin:        prediction.prob_away_win,
+          mostLikelyScore:    prediction.most_likely_score,
+          confidence:         prediction.confidence,
+          probBttsYes:        prediction.prob_btts_yes,
+          probOver15:         prediction.prob_over_15,
+          probOver25:         prediction.prob_over_25,
+          probOver35:         prediction.prob_over_35,
+          bttsRecommend:      prediction.btts_recommend,
+          over15Recommend:    prediction.over_15_recommend,
+          over25Recommend:    prediction.over_25_recommend,
+          over35Recommend:    prediction.over_35_recommend,
+          winnerRecommend:    prediction.winner_recommend,
+          expectedHomeGoals:  prediction.expected_home_goals,
+          expectedAwayGoals:  prediction.expected_away_goals,
+          favorite:           prediction.favorite,
+          predictedResult:    prediction.predicted_result,
+          funfacts:           prediction.funfacts,
+          aiPreview:          prediction.ai_preview,
         } : null}
         groupStandings={groupStandings}
         groupName={groupName}

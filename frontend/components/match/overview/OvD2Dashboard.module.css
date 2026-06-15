@@ -12,6 +12,58 @@
 .cardNum {
   font-size: 24px;
 }
+
+/* ── Prediction strip ─────────────────────────────── */
+.predHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.predLabel {
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: #888;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.predBadges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.predCols {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  align-items: end;
+  margin-bottom: 10px;
+}
+.predPct {
+  font-size: 40px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.predPctSuffix {
+  font-size: 22px;
+}
+.predDrawPct {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+.predDrawSuffix {
+  font-size: 13px;
+}
+.predDrawCenter {
+  text-align: center;
+  padding: 0 24px;
+}
+
 @media (max-width: 639px) {
   .bodyGrid {
     grid-template-columns: 1fr;
@@ -21,5 +73,34 @@
   }
   .cardNum {
     font-size: 16px;
+  }
+
+  /* Prediction strip — compact on mobile */
+  .predHeader {
+    margin-bottom: 10px;
+    gap: 6px;
+  }
+  .predLabel {
+    font-size: 10px;
+    letter-spacing: 2px;
+  }
+  .predCols {
+    margin-bottom: 8px;
+  }
+  .predPct {
+    font-size: 26px;
+    letter-spacing: -0.5px;
+  }
+  .predPctSuffix {
+    font-size: 14px;
+  }
+  .predDrawPct {
+    font-size: 16px;
+  }
+  .predDrawSuffix {
+    font-size: 10px;
+  }
+  .predDrawCenter {
+    padding: 0 12px;
   }
 }

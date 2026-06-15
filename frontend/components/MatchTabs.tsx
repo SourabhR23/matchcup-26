@@ -9,6 +9,7 @@ import BsdStatsPanel from './match/stats/BsdStatsPanel'
 import BsdVizPanel from './match/stats/BsdVizPanel'
 import StandingsPanel from './match/standings/StandingsPanel'
 import OverviewTab from './match/overview/OverviewTab'
+import PredictionTab from './match/prediction/PredictionTab'
 import { StatSectionA, StatRowA } from './match/stats/helpers'
 import type { OvProps } from './match/types'
 
@@ -16,7 +17,7 @@ export type { ExtStats, MatchTabsProps } from './match/types'
 
 import type { MatchTabsProps } from './match/types'
 
-type Tab = 'overview' | 'lineups' | 'stats' | 'analysis' | 'standings'
+type Tab = 'overview' | 'lineups' | 'stats' | 'analysis' | 'standings' | 'prediction'
 
 export default function MatchTabs({
   homeTeam, awayTeam, homeAbbr, awayAbbr,
@@ -24,9 +25,9 @@ export default function MatchTabs({
   xgHome, xgAway, homeScorers, awayScorers,
   topPlayers, playerRosterImages, lineups, bsdStats, prediction,
   venue, matchDate, roundLabel, homeCoach, awayCoach,
-  groupStandings, groupName,
+  groupStandings, groupName, isLive,
 }: MatchTabsProps) {
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTab] = useState<Tab>(isLive && lineups ? 'lineups' : 'overview')
 
   const homeYellows = incidents.filter(i => i.is_home && i.type === 'card' && i.card_type === 'yellow').length
   const awayYellows = incidents.filter(i => !i.is_home && i.type === 'card' && i.card_type === 'yellow').length
@@ -69,7 +70,7 @@ export default function MatchTabs({
     homeYellows, awayYellows, homeReds, awayReds,
     hPassAcc, aPassAcc,
     topPlayers, playerImageMap, bsdStats, prediction,
-    venue, matchDate, roundLabel,
+    venue, matchDate, roundLabel, isLive,
   }
 
   return (
@@ -79,9 +80,10 @@ export default function MatchTabs({
       <div className={styles.tabBar} style={{ background: '#fff', borderBottom: '1px solid #e8e2d8', paddingLeft: 4 }}>
         {tabBtn('overview', 'Overview')}
         {tabBtn('lineups', 'Lineups')}
-        {tabBtn('stats', 'Stats')}
+        {(!isLive || hasStats || bsdStats) && tabBtn('stats', 'Stats')}
         {bsdStats && tabBtn('analysis', 'Analysis')}
         {groupStandings && groupStandings.length > 0 && tabBtn('standings', 'Standings')}
+        {prediction && tabBtn('prediction', 'Prediction')}
       </div>
 
       {/* ── Overview ── */}
@@ -198,6 +200,17 @@ export default function MatchTabs({
           groupName={groupName}
           homeTeam={homeTeam}
           awayTeam={awayTeam}
+        />
+      )}
+
+      {/* ══ PREDICTION ═════════════════════════════════════════════ */}
+      {tab === 'prediction' && prediction && (
+        <PredictionTab
+          prediction={prediction}
+          homeTeam={homeTeam}
+          awayTeam={awayTeam}
+          homeAbbr={homeAbbr}
+          awayAbbr={awayAbbr}
         />
       )}
 

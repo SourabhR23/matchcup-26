@@ -7,7 +7,7 @@ import IncidentTimeline from '@/components/IncidentTimeline'
 import TopPlayersSection from '../shared/TopPlayersSection'
 import MatchFactsSection from '../shared/MatchFactsSection'
 
-export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, incidents, hStats, aStats, hasStats, xgHome, xgAway, homeYellows, awayYellows, hPassAcc, aPassAcc, topPlayers, playerImageMap, bsdStats, prediction, venue, matchDate, roundLabel }: OvProps) {
+export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, incidents, hStats, aStats, hasStats, xgHome, xgAway, homeYellows, awayYellows, hPassAcc, aPassAcc, topPlayers, playerImageMap, bsdStats, prediction, venue, matchDate, roundLabel, isLive }: OvProps) {
   const bsd = bsdStats?.stats
   const bigCards = [
     { label:'POSSESSION',     h:bsd?.home.ball_possession??0,  a:bsd?.away.ball_possession??0,  pct:true, avail:!!bsd },
@@ -40,57 +40,100 @@ export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, 
 
   return (
     <div style={{ background:'#111' }}>
-      {/* Prediction banner */}
-      {prediction?.probHomeWin != null && (
-        <div style={{ display:'flex', alignItems:'center', padding:'10px 20px', gap:14, background:'#0d0d0d', borderBottom:'1px solid #1c1c1c' }}>
-          <div style={{ minWidth:48 }}>
-            <div style={{ fontSize:24, fontWeight:900, color:'#f0ece4', lineHeight:1 }}>{prediction.probHomeWin.toFixed(0)}%</div>
-            <div style={{ fontSize:7, color:'#888', letterSpacing:1.5, marginTop:2 }}>{homeAbbr}</div>
-          </div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:7, color:'#777', letterSpacing:1.5, textAlign:'center', marginBottom:4 }}>
-              PRE-MATCH{prediction.mostLikelyScore ? ` · ${prediction.mostLikelyScore}` : ''}
+      {/* Prediction strip — bold redesign */}
+      {prediction?.probHomeWin != null && (() => {
+        const hw = prediction.probHomeWin ?? 0
+        const dw = prediction.probDraw    ?? 0
+        const aw = prediction.probAwayWin ?? 0
+        const resultLabel = (r: string | null | undefined) =>
+          r === 'H' ? homeAbbr + ' WIN' : r === 'A' ? awayAbbr + ' WIN' : r === 'D' ? 'DRAW' : null
+        return (
+          <div style={{ background:'#0a0a0a', borderBottom:'1px solid #1c1c1c', padding:'18px 24px 14px' }}>
+            {/* Header row */}
+            <div className={styles.predHeader}>
+              <span className={styles.predLabel}>PRE-MATCH PREDICTION</span>
+              <div className={styles.predBadges}>
+                {prediction.mostLikelyScore && (
+                  <span style={{ fontSize:10, letterSpacing:1, color:'#555', background:'#1a1a1a', padding:'3px 10px' }}>
+                    Predicted · <strong style={{ color:'#888' }}>{prediction.mostLikelyScore}</strong>
+                  </span>
+                )}
+                {resultLabel(prediction.predictedResult) && (
+                  <span style={{ fontSize:9, letterSpacing:2, color:'var(--color-accent)', background:'#1a0000', padding:'3px 10px', fontWeight:700 }}>
+                    {resultLabel(prediction.predictedResult)}
+                  </span>
+                )}
+              </div>
             </div>
-            <div style={{ display:'flex', height:4, overflow:'hidden' }}>
-              <div style={{ flex:prediction.probHomeWin, background:'var(--color-accent)' }} />
-              <div style={{ flex:prediction.probDraw??0, background:'#444' }} />
-              <div style={{ flex:prediction.probAwayWin??0, background:'#2a2a2a' }} />
+            {/* Three probability columns */}
+            <div className={styles.predCols}>
+              {/* Home — red */}
+              <div>
+                <div className={styles.predPct} style={{ color:'var(--color-accent)' }}>
+                  {hw.toFixed(0)}<span className={styles.predPctSuffix} style={{ color:'var(--color-accent)', opacity:0.6 }}>%</span>
+                </div>
+                <div style={{ fontSize:10, letterSpacing:2, color:'var(--color-accent)', marginTop:4, fontWeight:700, opacity:0.8 }}>{homeAbbr} WIN</div>
+              </div>
+              {/* Draw centre */}
+              <div className={styles.predDrawCenter}>
+                <div className={styles.predDrawPct} style={{ color:'#555' }}>
+                  {dw.toFixed(0)}<span className={styles.predDrawSuffix}>%</span>
+                </div>
+                <div style={{ fontSize:9, letterSpacing:2, color:'#444', marginTop:4 }}>DRAW</div>
+              </div>
+              {/* Away — white */}
+              <div style={{ textAlign:'right' }}>
+                <div className={styles.predPct} style={{ color:'#f0ece4' }}>
+                  {aw.toFixed(0)}<span className={styles.predPctSuffix} style={{ color:'#aaa' }}>%</span>
+                </div>
+                <div style={{ fontSize:10, letterSpacing:2, color:'#aaa', marginTop:4, fontWeight:700 }}>{awayAbbr} WIN</div>
+              </div>
             </div>
-            <div style={{ fontSize:7, color:'#777', textAlign:'center', marginTop:3 }}>DRAW {(prediction.probDraw??0).toFixed(1)}%</div>
+            {/* Probability bar */}
+            <div style={{ display:'flex', height:5, borderRadius:2, overflow:'hidden', gap:2 }}>
+              <div style={{ flex:hw, background:'var(--color-accent)', minWidth: hw > 0 ? 4 : 0 }} />
+              <div style={{ flex:dw, background:'#333', minWidth: dw > 0 ? 4 : 0 }} />
+              <div style={{ flex:aw, background:'#f0ece4', minWidth: aw > 0 ? 4 : 0 }} />
+            </div>
           </div>
-          <div style={{ minWidth:48, textAlign:'right' }}>
-            <div style={{ fontSize:24, fontWeight:900, color:'#aaa', lineHeight:1 }}>{(prediction.probAwayWin??0).toFixed(0)}%</div>
-            <div style={{ fontSize:7, color:'#888', letterSpacing:1.5, marginTop:2 }}>{awayAbbr}</div>
-          </div>
-        </div>
-      )}
+        )
+      })()}
       {/* Metric cards — cream background, black bold text */}
       <div style={{ padding:'16px 16px 0' }}>
-        <div className={styles.cardsRow}>
-          <span style={{ fontSize:17, fontWeight:800, color:'var(--color-accent)', letterSpacing:1 }}>{homeAbbr}</span>
-          <span style={{ fontSize:11, letterSpacing:3, color:'#777' }}>KEY METRICS</span>
-          <span style={{ fontSize:17, fontWeight:800, color:'#aaa', letterSpacing:1 }}>{awayAbbr}</span>
-        </div>
-        <div className={styles.cardsGrid} style={{ display:'grid', gridTemplateColumns:`repeat(${bigCards.length}, 1fr)`, gap:6, paddingBottom:16 }}>
-          {bigCards.map(c => {
-            const t = c.h + c.a || 1; const hPct = (c.h/t)*100
-            const fh = (c as {dec?:boolean}).dec ? c.h.toFixed(2) : c.pct ? `${c.h}%` : String(c.h)
-            const fa = (c as {dec?:boolean}).dec ? c.a.toFixed(2) : c.pct ? `${c.a}%` : String(c.a)
-            return (
-              <div key={c.label} style={{ background:'#f5f0e8', padding:'14px 10px' }}>
-                <div style={{ fontSize:9, letterSpacing:1.5, color:'#555', fontWeight:700, marginBottom:10, textAlign:'center' }}>{c.label}</div>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8, padding:'0 4px' }}>
-                  <span className={styles.cardNum} style={{ fontWeight:900, color:hasStats?'#111':'#aaa', fontVariantNumeric:'tabular-nums' }}>{hasStats?fh:'—'}</span>
-                  <span className={styles.cardNum} style={{ fontWeight:900, color:hasStats?'#555':'#aaa', fontVariantNumeric:'tabular-nums' }}>{hasStats?fa:'—'}</span>
-                </div>
-                <div style={{ height:3, display:'flex', overflow:'hidden' }}>
-                  <div style={{ width:`${hPct}%`, height:'100%', background:'var(--color-accent)' }} />
-                  <div style={{ flex:1, height:'100%', background:'#999' }} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        {(isLive && !hasStats) ? (
+          <div style={{ background:'#f5f0e8', padding:'18px 16px', marginBottom:16, display:'flex', alignItems:'center', gap:10 }}>
+            <span style={{ width:8, height:8, borderRadius:'50%', background:'#cc0000', flexShrink:0, display:'inline-block' }} />
+            <span style={{ fontSize:11, letterSpacing:2, color:'#555', fontWeight:600 }}>LIVE — MATCH STATS AVAILABLE AT FULL TIME</span>
+          </div>
+        ) : (
+          <>
+            <div className={styles.cardsRow}>
+              <span style={{ fontSize:17, fontWeight:800, color:'var(--color-accent)', letterSpacing:1 }}>{homeAbbr}</span>
+              <span style={{ fontSize:15, letterSpacing:3, color:'#aaa', fontWeight:800 }}>KEY METRICS</span>
+              <span style={{ fontSize:17, fontWeight:800, color:'#aaa', letterSpacing:1 }}>{awayAbbr}</span>
+            </div>
+            <div className={styles.cardsGrid} style={{ display:'grid', gridTemplateColumns:`repeat(${bigCards.length}, 1fr)`, gap:6, paddingBottom:16, minWidth:0 }}>
+              {bigCards.map(c => {
+                const t = c.h + c.a || 1; const hPct = (c.h/t)*100
+                const fh = (c as {dec?:boolean}).dec ? c.h.toFixed(2) : c.pct ? `${c.h}%` : String(c.h)
+                const fa = (c as {dec?:boolean}).dec ? c.a.toFixed(2) : c.pct ? `${c.a}%` : String(c.a)
+                return (
+                  <div key={c.label} style={{ background:'#f5f0e8', padding:'14px 10px' }}>
+                    <div style={{ fontSize:9, letterSpacing:1.5, color:'#555', fontWeight:700, marginBottom:10, textAlign:'center' }}>{c.label}</div>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8, padding:'0 4px' }}>
+                      <span className={styles.cardNum} style={{ fontWeight:900, color:hasStats?'#111':'#aaa', fontVariantNumeric:'tabular-nums' }}>{hasStats?fh:'—'}</span>
+                      <span className={styles.cardNum} style={{ fontWeight:900, color:hasStats?'#555':'#aaa', fontVariantNumeric:'tabular-nums' }}>{hasStats?fa:'—'}</span>
+                    </div>
+                    <div style={{ height:3, display:'flex', overflow:'hidden' }}>
+                      <div style={{ width:`${hPct}%`, height:'100%', background:'var(--color-accent)' }} />
+                      <div style={{ flex:1, height:'100%', background:'#999' }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
       </div>
       {/* 2-col: events left | players+facts right (dark bg) */}
       <div className={styles.bodyGrid}>

@@ -236,11 +236,27 @@ export default function LiveMatchDetail({ eventId }: { eventId: number }) {
 
   /* Lineups + prediction for MatchTabs */
   const normLu = normLineups(lineups ?? detail.lineups)
-  const pred   = prediction ? {
-    probHomeWin:     prediction.prob_home_win,
-    probDraw:        prediction.prob_draw,
-    probAwayWin:     prediction.prob_away_win,
-    mostLikelyScore: prediction.most_likely_score,
+  const pred = prediction ? {
+    probHomeWin:        prediction.prob_home_win,
+    probDraw:           prediction.prob_draw,
+    probAwayWin:        prediction.prob_away_win,
+    mostLikelyScore:    prediction.most_likely_score,
+    confidence:         prediction.confidence,
+    probBttsYes:        prediction.prob_btts_yes,
+    probOver15:         prediction.prob_over_15,
+    probOver25:         prediction.prob_over_25,
+    probOver35:         prediction.prob_over_35,
+    bttsRecommend:      prediction.btts_recommend,
+    over15Recommend:    prediction.over_15_recommend,
+    over25Recommend:    prediction.over_25_recommend,
+    over35Recommend:    prediction.over_35_recommend,
+    winnerRecommend:    prediction.winner_recommend,
+    expectedHomeGoals:  prediction.expected_home_goals,
+    expectedAwayGoals:  prediction.expected_away_goals,
+    favorite:           prediction.favorite,
+    predictedResult:    prediction.predicted_result,
+    funfacts:           prediction.funfacts,
+    aiPreview:          prediction.ai_preview,
   } : null
 
   const roundLabel = detail.round_number
@@ -393,6 +409,7 @@ export default function LiveMatchDetail({ eventId }: { eventId: number }) {
         venue={detail.venue ?? null}
         matchDate={detail.event_date ?? null}
         roundLabel={roundLabel}
+        isLive={isLive || isHT}
       />
     </div>
   )

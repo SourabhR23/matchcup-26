@@ -30,6 +30,7 @@ export interface OvProps {
   prediction: MatchTabsProps['prediction']
   venue?: { name?:string; city?:string; country?:string; capacity?:number } | null
   matchDate?: string|null; roundLabel?: string|null
+  isLive?: boolean
 }
 
 export interface MatchTabsProps {
@@ -42,7 +43,15 @@ export interface MatchTabsProps {
   playerRosterImages?: { name: string; shortName?: string; imageUrl: string }[]
   lineups: { home: LineupTeam; away: LineupTeam } | null
   bsdStats?: BsdMatchStats | null
-  prediction: { probHomeWin: number | null; probDraw: number | null; probAwayWin: number | null; mostLikelyScore: string | null } | null
+  prediction: {
+    probHomeWin: number | null; probDraw: number | null; probAwayWin: number | null
+    mostLikelyScore: string | null; confidence: number | null
+    probBttsYes: number | null; probOver15: number | null; probOver25: number | null; probOver35: number | null
+    bttsRecommend: boolean | null; over15Recommend: boolean | null; over25Recommend: boolean | null; over35Recommend: boolean | null
+    winnerRecommend: boolean | null; expectedHomeGoals: number | null; expectedAwayGoals: number | null
+    favorite: string | null; predictedResult: string | null
+    funfacts: string[]; aiPreview: string | null
+  } | null
   venue?: { name?: string; city?: string; country?: string; capacity?: number } | null
   matchDate?: string | null
   roundLabel?: string | null
@@ -50,4 +59,5 @@ export interface MatchTabsProps {
   awayCoach?: string | null
   groupStandings?: GroupTeamStat[] | null
   groupName?: string | null
+  isLive?: boolean
 }
