@@ -1,0 +1,11 @@
+/* BsdDesign1 is a single-column layout — no outer column grid to extract.
+   The stat rows use helpers (BsdStatRow / BsdFracRow) which are already single-column.
+   Responsive padding override for mobile. */
+.root {
+  padding: 0 24px 32px;
+}
+@media (max-width: 639px) {
+  .root {
+    padding: 0 12px 32px;
+  }
+}

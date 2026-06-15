@@ -1,0 +1,18 @@
+.playerPairRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid #f0ece4;
+}
+.sectionHeader {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 6px;
+}
+@media (max-width: 639px) {
+  .playerPairRow {
+    grid-template-columns: 1fr;
+  }
+  .sectionHeader {
+    grid-template-columns: 1fr;
+  }
+}

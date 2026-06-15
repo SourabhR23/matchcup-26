@@ -1,0 +1,17 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  gap: 0 16px;
+}
+.divider {
+  background: #eee;
+}
+@media (max-width: 639px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 16px 0;
+  }
+  .divider {
+    display: none;
+  }
+}

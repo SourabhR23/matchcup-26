@@ -1,0 +1,10 @@
+.formCol {
+  display: flex;
+  gap: 3px;
+  justify-content: flex-end;
+}
+@media (max-width: 639px) {
+  .formCol {
+    display: none;
+  }
+}

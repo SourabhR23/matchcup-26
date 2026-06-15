@@ -1,0 +1,25 @@
+/* The cards grid is dynamic (repeat(N, 1fr)) — keep inline */
+/* Only the body 2-col needs CSS module */
+.bodyGrid {
+  display: grid;
+  grid-template-columns: 55% 45%;
+}
+.cardsRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.cardNum {
+  font-size: 24px;
+}
+@media (max-width: 639px) {
+  .bodyGrid {
+    grid-template-columns: 1fr;
+  }
+  .cardsGrid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .cardNum {
+    font-size: 16px;
+  }
+}

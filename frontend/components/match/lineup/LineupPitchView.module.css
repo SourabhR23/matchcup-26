@@ -1,0 +1,9 @@
+.benchGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 639px) {
+  .benchGrid {
+    grid-template-columns: 1fr;
+  }
+}

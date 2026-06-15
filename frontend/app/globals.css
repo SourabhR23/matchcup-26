@@ -1,0 +1,241 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg: #f5f0e8;
+    --color-surface: #ffffff;
+    --color-ink: #111111;
+    --color-ink-muted: #555555;
+    --color-ink-faint: #999999;
+    --color-ink-ghost: #cccccc;
+    --color-accent: #8b0000;
+    --color-accent-foreground: #ffffff;
+    --color-danger: #cc0000;
+    --color-warning: #d4a700;
+    --color-success: #16a34a;
+    --topbar-height: 44px;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-inter), 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-bebas), 'Arial Narrow', sans-serif;
+  }
+}
+
+@layer components {
+  /* ── Section heading ── */
+  .sec-head {
+    font-family: var(--font-bebas), 'Arial Narrow', sans-serif;
+    font-size: 28px;
+    letter-spacing: 2px;
+    color: var(--color-ink);
+    border-bottom: 3px solid var(--color-ink);
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+  }
+
+  /* ── Pill badges ── */
+  .pill-accent {
+    background: var(--color-accent);
+    color: var(--color-accent-foreground);
+    font-size: 9px;
+    padding: 2px 7px;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+  .pill-dark {
+    background: #1a1a1a;
+    color: #777;
+    font-size: 9px;
+    padding: 3px 9px;
+    letter-spacing: 1px;
+  }
+  .pill-live {
+    background: var(--color-danger);
+    color: #fff;
+    font-size: 9px;
+    padding: 3px 9px;
+    letter-spacing: 1px;
+  }
+  .pill-finished {
+    background: #1a1a1a;
+    color: #555;
+    font-size: 9px;
+    padding: 3px 9px;
+    letter-spacing: 1px;
+  }
+
+  /* ── Match card (dark) ── */
+  .match-card {
+    background: #111;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+  }
+  .match-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    opacity: 1;
+  }
+
+  /* ── Stat card ── */
+  .stat-card {
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  /* ── Group card ── */
+  .group-card {
+    background: var(--color-surface);
+    border: 0.5px solid #ddd8cc;
+  }
+  .group-card-head {
+    background: #111;
+    padding: 8px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* ── Filter button ── */
+  .filter-btn {
+    font-size: 10px;
+    padding: 5px 12px;
+    border: 0.5px solid #ccc;
+    background: var(--color-surface);
+    cursor: pointer;
+    letter-spacing: 1px;
+    color: #555;
+    transition: all 0.15s;
+    font-family: var(--font-inter), sans-serif;
+  }
+  .filter-btn:hover { border-color: #111; color: #111; }
+  .filter-btn.active {
+    background: #111;
+    color: var(--color-accent);
+    border-color: #111;
+  }
+
+  /* ── Team row ── */
+  .team-row {
+    background: var(--color-surface);
+    border: 0.5px solid #e8e2d8;
+    padding: 12px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  }
+  .team-row:hover {
+    border-color: #111;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+  }
+
+  /* ── Stat bar ── */
+  .stat-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .stat-bar-label { font-size: 10px; color: #999; min-width: 120px; }
+  .stat-bar-track {
+    flex: 1;
+    height: 4px;
+    background: #f0ece4;
+    position: relative;
+  }
+  .stat-bar-fill {
+    height: 100%;
+    background: var(--color-accent);
+    position: absolute;
+    left: 0; top: 0;
+  }
+  .stat-bar-val { font-size: 11px; font-weight: 500; min-width: 24px; text-align: right; }
+
+  /* ── Position section label ── */
+  .pos-label {
+    font-family: var(--font-bebas), 'Arial Narrow', sans-serif;
+    font-size: 14px;
+    color: var(--color-accent);
+    background: #1a1a1a;
+    padding: 4px 18px;
+    letter-spacing: 2px;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+
+  /* ── Back button ── */
+  .back-btn {
+    font-size: 10px;
+    color: #555;
+    cursor: pointer;
+    letter-spacing: 1.5px;
+    padding: 6px 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    font-family: var(--font-inter), sans-serif;
+  }
+  .back-btn:hover { color: #111; }
+
+  /* ── Live dot animation ── */
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    background: currentColor;
+    border-radius: 50%;
+    animation: blink 1s infinite;
+    display: inline-block;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── Stat bar fill animation (mount → actual width) ── */
+  @keyframes barExpand {
+    from { max-width: 0; }
+    to   { max-width: 100%; }
+  }
+  .bar-anim {
+    animation: barExpand 0.6s ease forwards;
+  }
+
+  /* ── Staggered fade-in grid ── */
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-grid > * {
+    animation: fadeSlideUp 0.35s ease both;
+  }
+  .fade-grid > *:nth-child(1) { animation-delay:   0ms; }
+  .fade-grid > *:nth-child(2) { animation-delay:  60ms; }
+  .fade-grid > *:nth-child(3) { animation-delay: 120ms; }
+  .fade-grid > *:nth-child(4) { animation-delay: 180ms; }
+  .fade-grid > *:nth-child(5) { animation-delay: 240ms; }
+  .fade-grid > *:nth-child(6) { animation-delay: 300ms; }
+  .fade-grid > *:nth-child(7) { animation-delay: 360ms; }
+  .fade-grid > *:nth-child(8) { animation-delay: 400ms; }
+  .fade-grid > *:nth-child(n+9) { animation-delay: 440ms; }
+}

@@ -1,0 +1,9 @@
+.twoCol {
+  display: grid;
+  grid-template-columns: 55% 45%;
+}
+@media (max-width: 639px) {
+  .twoCol {
+    grid-template-columns: 1fr;
+  }
+}

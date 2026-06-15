@@ -1,0 +1,41 @@
+.heroRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+.teamName {
+  font-size: 52px;
+  color: #f5f0e8;
+  line-height: 1;
+  letter-spacing: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scoreBlock {
+  text-align: center;
+  padding: 0 16px;
+  min-width: 110px;
+  align-self: center;
+  flex-shrink: 0;
+}
+.scoreNum {
+  font-size: 72px;
+  color: var(--color-accent);
+  line-height: 1;
+  letter-spacing: 4px;
+}
+@media (max-width: 639px) {
+  .teamName {
+    font-size: 26px;
+    letter-spacing: 1px;
+  }
+  .scoreBlock {
+    min-width: 72px;
+    padding: 0 6px;
+  }
+  .scoreNum {
+    font-size: 44px;
+    letter-spacing: 2px;
+  }
+}
