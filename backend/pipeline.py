@@ -334,17 +334,76 @@ def run_cron():
     print(f'\nCron done. Collected {collected} event(s).')
 
 
+# ── Serve mode: long-running web service for Render free tier ────────────────
+def run_serve(interval: int = 300):
+    """
+    Starts a background scheduler loop that calls run_cron() every `interval`
+    seconds, plus a minimal HTTP server on $PORT so Render keeps the service
+    alive and UptimeRobot can ping it.
+
+    UptimeRobot: add an HTTP monitor pointing to your Render service URL,
+    ping every 5 minutes — this prevents the free instance from spinning down.
+    """
+    import threading
+    import http.server
+
+    last_run: dict = {'time': 'never', 'collected': 0}
+
+    def scheduler():
+        while True:
+            try:
+                print(f'\n[scheduler] Starting collection …')
+                run_cron()
+                last_run['time'] = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+            except Exception as e:
+                print(f'[scheduler] ERROR: {e}')
+            print(f'[scheduler] Sleeping {interval}s until next run …\n')
+            time.sleep(interval)
+
+    thread = threading.Thread(target=scheduler, daemon=True)
+    thread.start()
+    print(f'[serve] Scheduler started — interval={interval}s')
+
+    # Minimal HTTP health-check server
+    class HealthHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = (
+                f'FIFA WC 2026 Collector — OK\n'
+                f'Last run: {last_run["time"]}\n'
+                f'Collected this run: {last_run["collected"]}\n'
+            ).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        def log_message(self, *args):
+            pass  # silence access logs
+
+    port = int(os.getenv('PORT', '8000'))
+    server = http.server.HTTPServer(('0.0.0.0', port), HealthHandler)
+    print(f'[serve] Health check listening on port {port}')
+    print(f'[serve] Add this URL to UptimeRobot to keep the service alive\n')
+    server.serve_forever()
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description='FIFA WC 2026 — BSD → Supabase match pipeline')
-    parser.add_argument('--cron',  action='store_true', help='Cron mode: auto-detect + collect newly finished matches')
-    parser.add_argument('--id',    type=int, nargs='+',  help='Collect specific event ID(s)')
-    parser.add_argument('--all',   action='store_true',  help='Re-collect all matches in Supabase')
-    parser.add_argument('--force', action='store_true',  help='Re-collect even if already finished in Supabase')
+    parser.add_argument('--serve',  action='store_true', help='Web service mode: runs scheduler loop + HTTP health check (for Render free tier)')
+    parser.add_argument('--interval', type=int, default=300, help='Seconds between collection runs in --serve mode (default: 300)')
+    parser.add_argument('--cron',   action='store_true', help='Single cron run: auto-detect + collect newly finished matches')
+    parser.add_argument('--id',     type=int, nargs='+',  help='Collect specific event ID(s)')
+    parser.add_argument('--all',    action='store_true',  help='Re-collect all matches in Supabase')
+    parser.add_argument('--force',  action='store_true',  help='Re-collect even if already finished in Supabase')
     args = parser.parse_args()
 
     print(f'Supabase: {SUPABASE_URL}')
     print(f'BSD API:  {BSD_BASE}\n')
+
+    if args.serve:
+        run_serve(interval=args.interval)
+        return  # blocks forever
 
     if args.cron:
         run_cron()

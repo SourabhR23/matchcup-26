@@ -1,10 +1,10 @@
 services:
-  - type: cron
+  - type: web
     name: wc2026-match-collector
     runtime: python
-    schedule: "*/5 * * * *"
+    plan: free
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: python backend/pipeline.py --cron
+    startCommand: python backend/pipeline.py --serve --interval 300
     envVars:
       - key: BSD_TOKEN
         sync: false
