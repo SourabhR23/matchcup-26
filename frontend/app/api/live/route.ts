@@ -113,7 +113,7 @@ export async function GET() {
        (90 min match + 45 min grace period).
     ─────────────────────────────────────────────────────────────────── */
     const soonIds  = new Set(soonEvents.map((e) => (e as Record<string, unknown>).id as number))
-    const ftCutoff = new Date(now.getTime() - 115 * 60 * 1000)  // 115 min ago (~20 min post-FT)
+    const ftCutoff = new Date(now.getTime() - 165 * 60 * 1000)  // 165 min ago (covers ET + penalties)
 
     const { data: ftRows } = await supabaseServer
       .from('matches')
@@ -151,7 +151,7 @@ export async function GET() {
        Show as FT using time-based detection instead of status.
     ─────────────────────────────────────────────────────────────────── */
     const ftIds    = new Set(ftEvents.map((e) => (e as Record<string, unknown>).id as number))
-    const gapStart = new Date(now.getTime() - 115 * 60 * 1000)
+    const gapStart = new Date(now.getTime() - 165 * 60 * 1000)
     const gapEnd   = new Date(now.getTime() - 100 * 60 * 1000)
 
     const { data: gapRows } = await supabaseServer
