@@ -60,6 +60,12 @@ function statusKey(ev: MatchRow): 'live' | 'finished' | 'upcoming' {
   return 'upcoming'
 }
 
+/* Bracket placeholder codes like "2A", "G1", "3A/3B/3C/3D/3F" — not real teams yet */
+const PLACEHOLDER_RE = /^([A-Z]\d|\d[A-Z])(\/\d[A-Z])*$/
+function isPlaceholderTeam(name: string): boolean {
+  return PLACEHOLDER_RE.test((name || '').trim())
+}
+
 function formatTime(dateStr: string) {
   return new Date(dateStr).toLocaleTimeString('en-US', {
     hour: '2-digit', minute: '2-digit', hour12: false,
@@ -218,8 +224,10 @@ export default function MatchesPage() {
   const [events,       setEvents]       = useState<MatchRow[]>([])
   const [liveMap,      setLiveMap]      = useState<Record<number, MatchRow>>({})
   const [stageFilter,  setStageFilter]  = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('upcoming')
+  const [teamFilter,   setTeamFilter]   = useState('all')
   const [loading,      setLoading]      = useState(true)
+  const [scrolledToToday, setScrolledToToday] = useState(false)
 
   useEffect(() => {
     fetch('/api/events')
@@ -253,13 +261,21 @@ export default function MatchesPage() {
     if (!merged.find((e) => e.id === live.id)) merged.push(live)
   }
 
-  // Apply stage filter then status filter
-  const stageFiltered  = stageFilter  === 'all' ? merged        : merged.filter((e) => stageKey(e)  === stageFilter)
-  const statusFiltered = statusFilter === 'all' ? stageFiltered : stageFiltered.filter((e) => statusKey(e) === statusFilter)
+  // Hide unresolved bracket placeholder matches (e.g. "2A vs 1C") until real teams are assigned
+  const resolved = merged.filter((e) => !isPlaceholderTeam(e.home_team) && !isPlaceholderTeam(e.away_team))
 
-  const sorted = [...statusFiltered].sort(
+  // Apply stage filter, then status filter, then team filter
+  const stageFiltered  = stageFilter  === 'all' ? resolved       : resolved.filter((e) => stageKey(e)  === stageFilter)
+  const statusFiltered = statusFilter === 'all' ? stageFiltered  : stageFiltered.filter((e) => statusKey(e) === statusFilter)
+  const teamFiltered    = teamFilter   === 'all' ? statusFiltered : statusFiltered.filter((e) => e.home_team === teamFilter || e.away_team === teamFilter)
+
+  const sorted = [...teamFiltered].sort(
     (a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime()
   )
+
+  const teamOptions = Array.from(new Set(events.flatMap((e) => [e.home_team, e.away_team])))
+    .filter((t) => !isPlaceholderTeam(t))
+    .sort()
 
   const byDate: Record<string, MatchRow[]> = {}
   for (const ev of sorted) {
@@ -272,6 +288,18 @@ export default function MatchesPage() {
   )
 
   const liveCount = Object.keys(liveMap).length
+
+  useEffect(() => {
+    if (scrolledToToday || loading || dates.length === 0) return
+    const todayStr = new Date().toDateString()
+    const todayMs  = new Date(todayStr).getTime()
+    const targetKey = dates.find((d) => d === todayStr)
+      ?? dates.find((d) => new Date(d).getTime() >= todayMs)
+      ?? dates[dates.length - 1]
+    const el = document.getElementById(`date-${targetKey}`)
+    if (el) el.scrollIntoView({ block: 'start' })
+    setScrolledToToday(true)
+  }, [loading, dates, scrolledToToday])
 
   return (
     <div>
@@ -317,7 +345,7 @@ export default function MatchesPage() {
       </div>
 
       {/* Stage filter bar */}
-      <div className="flex gap-1.5 flex-wrap mb-5">
+      <div className="flex gap-1.5 flex-wrap items-center mb-5">
         {STAGES.map((s) => (
           <button
             key={s.key}
@@ -327,6 +355,23 @@ export default function MatchesPage() {
             {s.label}
           </button>
         ))}
+
+        <select
+          value={teamFilter}
+          onChange={(e) => setTeamFilter(e.target.value)}
+          style={{
+            fontSize: 10, padding: '5px 10px', letterSpacing: 1,
+            border: teamFilter !== 'all' ? '0.5px solid #111' : '0.5px solid #ccc',
+            background: 'var(--color-surface)',
+            color: teamFilter !== 'all' ? 'var(--color-accent)' : '#555',
+            fontFamily: 'var(--font-inter)', cursor: 'pointer',
+          }}
+        >
+          <option value="all">ALL TEAMS</option>
+          {teamOptions.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
       </div>
 
       {loading && (
@@ -347,7 +392,7 @@ export default function MatchesPage() {
         const upcomingInDay  = dayEvents.filter((e) => e.status === 'notstarted' || e.status === 'scheduled')
 
         return (
-          <div key={dk} className="mb-8">
+          <div key={dk} id={`date-${dk}`} className="mb-8">
             <div className="flex items-center gap-3 mb-3">
               <span className="font-display text-[16px] tracking-[2px] text-ink-faint">
                 {label.toUpperCase()}
