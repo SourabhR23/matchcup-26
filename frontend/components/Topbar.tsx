@@ -46,9 +46,9 @@ export default function Topbar() {
         })}
       </nav>
 
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex flex-col items-end gap-0.5 sm:flex-row sm:items-center sm:gap-2 flex-shrink-0">
         <span className="live-dot text-danger" />
-        <span className="hidden sm:inline text-[10px] text-[#444] tracking-[1px]">WC 2026</span>
+        <span className="text-[7px] sm:text-[10px] text-[#444] tracking-[0.5px] sm:tracking-[1px] leading-none">WC 2026</span>
       </div>
     </header>
   )

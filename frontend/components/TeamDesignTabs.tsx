@@ -220,27 +220,27 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
               </div>
 
               {/* Match progress dots */}
-              <div style={{ padding: '16px 36px', borderRight: '1px solid #2a2a2a', flexShrink: 0 }}>
+              <div style={{ padding: '16px 20px', borderRight: '1px solid #2a2a2a', flex: '1 1 auto', minWidth: 0, overflow: 'hidden' }}>
                 <div style={{ fontSize: 9, color: '#777', letterSpacing: 2, marginBottom: 12 }}>
                   {inKO ? 'WC 2026 JOURNEY' : 'GROUP STAGE'} · {totalPlayed}/{totalAll}
                 </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', overflowX: 'auto', paddingBottom: 2 }}>
                   {groupDots.map((d, i) => (
-                    <div key={`g${i}`} style={{ width: 36, height: 36, borderRadius: '50%', background: d.c, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div key={`g${i}`} style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', background: d.c, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: '#000', fontWeight: 700 }}>{d.l}</span>
                     </div>
                   ))}
                   {Array(groupEmpty).fill(null).map((_, i) => (
-                    <div key={`ge${i}`} style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid #2a2a2a' }} />
+                    <div key={`ge${i}`} style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', border: '2px solid #2a2a2a' }} />
                   ))}
                   {inKO && <div style={{ width: 1, height: 36, background: '#2a2a2a', margin: '0 4px', flexShrink: 0 }} />}
                   {koDots.map((d, i) => (
-                    <div key={`k${i}`} style={{ width: 36, height: 36, borderRadius: '50%', background: d.c, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div key={`k${i}`} style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', background: d.c, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: '#000', fontWeight: 700 }}>{d.l}</span>
                     </div>
                   ))}
                   {Array(koEmptyCount).fill(null).map((_, i) => (
-                    <div key={`ke${i}`} style={{ width: 36, height: 36, borderRadius: '50%', border: `2px dashed ${accent}55` }} />
+                    <div key={`ke${i}`} style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', border: `2px dashed ${accent}55` }} />
                   ))}
                 </div>
               </div>
@@ -333,7 +333,7 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
       )}
 
       {/* ── Body: Squad (left) + Venue / Stats (right) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: '#1a1a1a' }} className="max-md:grid-cols-1">
+      <div style={{ display: 'grid', gap: 1, background: '#1a1a1a' }} className="grid-cols-2 max-md:grid-cols-1">
 
         {/* Squad */}
         <div style={{ background: '#0d0d0d', padding: 24 }}>
