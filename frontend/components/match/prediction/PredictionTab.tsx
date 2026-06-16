@@ -1,5 +1,6 @@
 'use client'
 
+import styles from './PredictionTab.module.css'
 import type { MatchTabsProps } from '../types'
 
 type Pred = NonNullable<MatchTabsProps['prediction']>
@@ -66,13 +67,13 @@ export default function PredictionTab({ prediction, homeTeam, awayTeam, homeAbbr
         <div style={{ fontSize: 9, letterSpacing: 3, color: '#444', fontWeight: 700, marginBottom: 20 }}>MATCH OUTCOME</div>
 
         {/* Three big boxes */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 20 }}>
+        <div className={styles.outcomeGrid}>
           {/* Home */}
           <div style={{ background: prediction.predictedResult === 'H' ? '#1a0000' : '#111', border: `1px solid ${prediction.predictedResult === 'H' ? 'var(--color-accent)' : '#1e1e1e'}`, padding: '18px 16px' }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: prediction.predictedResult === 'H' ? 'var(--color-accent)' : '#444', marginBottom: 10, fontWeight: 700 }}>
               {homeAbbr} WIN {prediction.predictedResult === 'H' && '★'}
             </div>
-            <div style={{ fontSize: 44, fontWeight: 900, color: prediction.predictedResult === 'H' ? '#f0ece4' : '#555', lineHeight: 1, letterSpacing: -2 }}>
+            <div className={styles.outcomePct} style={{ color: prediction.predictedResult === 'H' ? '#f0ece4' : '#555' }}>
               {hw.toFixed(0)}<span style={{ fontSize: 20, color: '#444' }}>%</span>
             </div>
             <div style={{ height: 3, background: '#1e1e1e', borderRadius: 2, marginTop: 12 }}>
@@ -85,7 +86,7 @@ export default function PredictionTab({ prediction, homeTeam, awayTeam, homeAbbr
             <div style={{ fontSize: 9, letterSpacing: 2, color: prediction.predictedResult === 'D' ? '#aaa' : '#444', marginBottom: 10, fontWeight: 700 }}>
               DRAW {prediction.predictedResult === 'D' && '★'}
             </div>
-            <div style={{ fontSize: 44, fontWeight: 900, color: prediction.predictedResult === 'D' ? '#f0ece4' : '#444', lineHeight: 1, letterSpacing: -2 }}>
+            <div className={styles.outcomePct} style={{ color: prediction.predictedResult === 'D' ? '#f0ece4' : '#444' }}>
               {dw.toFixed(0)}<span style={{ fontSize: 20, color: '#333' }}>%</span>
             </div>
             <div style={{ height: 3, background: '#1e1e1e', borderRadius: 2, marginTop: 12 }}>
@@ -98,7 +99,7 @@ export default function PredictionTab({ prediction, homeTeam, awayTeam, homeAbbr
             <div style={{ fontSize: 9, letterSpacing: 2, color: prediction.predictedResult === 'A' ? '#aaa' : '#444', marginBottom: 10, fontWeight: 700 }}>
               {awayAbbr} WIN {prediction.predictedResult === 'A' && '★'}
             </div>
-            <div style={{ fontSize: 44, fontWeight: 900, color: prediction.predictedResult === 'A' ? '#f0ece4' : '#444', lineHeight: 1, letterSpacing: -2 }}>
+            <div className={styles.outcomePct} style={{ color: prediction.predictedResult === 'A' ? '#f0ece4' : '#444' }}>
               {aw.toFixed(0)}<span style={{ fontSize: 20, color: '#333' }}>%</span>
             </div>
             <div style={{ height: 3, background: '#1e1e1e', borderRadius: 2, marginTop: 12 }}>
@@ -137,11 +138,11 @@ export default function PredictionTab({ prediction, homeTeam, awayTeam, homeAbbr
       </div>
 
       {/* ── SECTION 2 + 3: Goal markets + xG ──────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: hasXg ? '1fr 1fr' : '1fr', gap: 0, borderBottom: '1px solid #1c1c1c' }}>
+      <div className={hasXg ? styles.marketsGrid : undefined} style={!hasXg ? { borderBottom: '1px solid #1c1c1c' } : undefined}>
 
         {/* Goal markets */}
         {hasGoalMarkets && (
-          <div style={{ padding: '22px 24px', borderRight: hasXg ? '1px solid #1c1c1c' : 'none' }}>
+          <div style={{ padding: '22px 24px', borderRight: hasXg ? '1px solid #1c1c1c' : 'none', borderBottom: '1px solid #1c1c1c' }}>
             <div style={{ fontSize: 9, letterSpacing: 3, color: '#444', fontWeight: 700, marginBottom: 4 }}>GOAL MARKETS</div>
             <MarketRow label="Over 1.5"  value={prediction.probOver15}  recommend={prediction.over15Recommend} />
             <MarketRow label="Over 2.5"  value={prediction.probOver25}  recommend={prediction.over25Recommend} />

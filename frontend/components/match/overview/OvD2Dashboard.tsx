@@ -39,7 +39,7 @@ export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, 
   ]
 
   return (
-    <div style={{ background:'#111' }}>
+    <div style={{ background:'#111', overflow:'hidden' }}>
       {/* Prediction strip — bold redesign */}
       {prediction?.probHomeWin != null && (() => {
         const hw = prediction.probHomeWin ?? 0
@@ -137,7 +137,7 @@ export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, 
       </div>
       {/* 2-col: events left | players+facts right (dark bg) */}
       <div className={styles.bodyGrid}>
-        <div style={{ padding:'18px 18px 16px', borderRight:'1px solid #1c1c1c' }}>
+        <div style={{ padding:'18px 18px 16px', borderRight:'1px solid #1c1c1c', minWidth:0, overflow:'hidden' }}>
           <div style={{ fontSize:14, letterSpacing:3, fontWeight:800, color:'var(--color-accent)', paddingBottom:8, marginBottom:14, borderBottom:'2px solid var(--color-accent)' }}>MATCH EVENTS</div>
           {incidents.length === 0
             ? <div style={{ fontSize:11, color:'#888', textAlign:'center', padding:'24px 0' }}>No event data.</div>

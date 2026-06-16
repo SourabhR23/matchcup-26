@@ -3,8 +3,21 @@
   gap: 3px;
   justify-content: flex-end;
 }
+
 @media (max-width: 639px) {
   .formCol {
     display: none;
+  }
+  .formHeader {
+    display: none;
+  }
+  .formCell {
+    display: none;
+  }
+  .teamBadge {
+    display: none;
+  }
+  .teamName {
+    font-size: 12px;
   }
 }

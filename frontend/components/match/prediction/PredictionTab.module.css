@@ -1,0 +1,33 @@
+.marketsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-bottom: 1px solid #1c1c1c;
+}
+
+.outcomeGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.outcomePct {
+  font-size: 44px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -2px;
+}
+
+@media (max-width: 639px) {
+  .marketsGrid {
+    grid-template-columns: 1fr;
+  }
+  .outcomeGrid {
+    gap: 6px;
+  }
+  .outcomePct {
+    font-size: 30px;
+    letter-spacing: -1px;
+  }
+}

@@ -43,7 +43,7 @@ export default function StandingsPanel({ teams, groupName, homeTeam, awayTeam }:
         <thead>
           <tr style={{ borderBottom: '1px solid #222' }}>
             {cols.map((h, i) => (
-              <th key={h} style={{
+              <th key={h} className={i === 8 ? panelStyles.formHeader : undefined} style={{
                 padding: '8px 6px',
                 textAlign: i === 1 ? 'left' : i === 8 ? 'right' : 'center',
                 color: '#888', fontWeight: 'normal', fontSize: 8, letterSpacing: 2,
@@ -81,7 +81,7 @@ export default function StandingsPanel({ teams, groupName, homeTeam, awayTeam }:
                 <td style={{ padding: '11px 6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                     <FlagImg country={t.team_name} width={20} />
-                    <span style={{
+                    <span className={panelStyles.teamName} style={{
                       fontSize: 15, fontWeight: isMatch ? 700 : 400,
                       color: isMatch ? '#f5f0e8' : '#ddd',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -89,7 +89,7 @@ export default function StandingsPanel({ teams, groupName, homeTeam, awayTeam }:
                       {t.team_name}
                     </span>
                     {isMatch && (
-                      <span style={{ fontSize: 7, background: 'var(--color-accent)', color: '#000', padding: '1px 5px', letterSpacing: 1.5, flexShrink: 0, fontWeight: 800 }}>
+                      <span className={panelStyles.teamBadge} style={{ fontSize: 7, background: 'var(--color-accent)', color: '#000', padding: '1px 5px', letterSpacing: 1.5, flexShrink: 0, fontWeight: 800 }}>
                         {isHome ? 'HOME' : 'AWAY'}
                       </span>
                     )}
@@ -108,7 +108,7 @@ export default function StandingsPanel({ teams, groupName, homeTeam, awayTeam }:
                   {t.pts}
                 </td>
                 {/* Form — newest first, last column */}
-                <td style={{ padding: '11px 14px 11px 6px', textAlign: 'right' }}>
+                <td className={panelStyles.formCell} style={{ padding: '11px 14px 11px 6px', textAlign: 'right' }}>
                   <div className={panelStyles.formCol}>
                     {t.form.map((r, fi) => <FormBadge key={fi} result={r} />)}
                   </div>

@@ -1,6 +1,7 @@
 import FlagImg from './FlagImg'
 import Link from 'next/link'
 import type { GroupTeamStat } from '@/lib/types'
+import styles from './AllGroupsGrid.module.css'
 
 interface Props {
   sortedGroups: [string, GroupTeamStat[]][]
@@ -101,7 +102,7 @@ function GroupTable({ groupName, teams }: { groupName: string; teams: GroupTeamS
 
 export default function AllGroupsGrid({ sortedGroups }: Props) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+    <div className={styles.grid}>
       {sortedGroups.map(([groupName, teams]) => (
         <GroupTable key={groupName} groupName={groupName} teams={teams} />
       ))}
