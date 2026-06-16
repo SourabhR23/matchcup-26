@@ -13,3 +13,19 @@
   pointer-events: none;
   z-index: 2;
 }
+
+.fadeWrapVertical {
+  position: relative;
+}
+.fadeWrapVertical::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28px;
+  background: linear-gradient(to bottom, transparent, var(--fade-bg, #fff));
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 2;
+}

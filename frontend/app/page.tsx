@@ -12,6 +12,7 @@ import LiveSection from '@/components/LiveSection'
 import UpcomingRow from '@/components/UpcomingRow'
 import HomeStandingsWidget from '@/components/HomeStandingsWidget'
 import TournamentTimeline from '@/components/TournamentTimeline'
+import fadeStyles from '@/components/ScrollFade.module.css'
 import type { GroupTeamStat } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -104,10 +105,12 @@ export default async function OverviewPage() {
       {upcomingMatches.length > 0 && (
         <section className="mb-8">
           <SectionHead>UPCOMING MATCHES</SectionHead>
-          <div className="border border-[#e8e2d8] overflow-hidden">
-            {upcomingMatches.map((ev) => (
-              <UpcomingRow key={ev.id} event={ev} />
-            ))}
+          <div className={fadeStyles.fadeWrapVertical} style={{ '--fade-bg': '#fff' } as React.CSSProperties}>
+            <div className="border border-[#e8e2d8]" style={{ maxHeight: 204, overflowY: 'auto' }}>
+              {upcomingMatches.map((ev) => (
+                <UpcomingRow key={ev.id} event={ev} />
+              ))}
+            </div>
           </div>
         </section>
       )}
