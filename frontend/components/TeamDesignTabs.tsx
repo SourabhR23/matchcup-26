@@ -196,7 +196,7 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
 
         return (
           <div style={{ borderBottom: '1px solid #1e1e1e', background: '#0a0a0a' }}>
-            <div style={{ display: 'flex', alignItems: 'stretch' }}>
+            <div style={{ display: 'flex', alignItems: 'stretch', overflowX: 'auto' }}>
 
               {/* Left hero: Group rank (frozen) + Points or Stage */}
               <div style={{ display: 'flex', borderRight: '1px solid #2a2a2a', flexShrink: 0 }}>
@@ -220,11 +220,11 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
               </div>
 
               {/* Match progress dots */}
-              <div style={{ padding: '16px 20px', borderRight: '1px solid #2a2a2a', flex: '1 1 auto', minWidth: 0, overflow: 'hidden' }}>
-                <div style={{ fontSize: 9, color: '#777', letterSpacing: 2, marginBottom: 12 }}>
+              <div style={{ padding: '16px 20px', borderRight: '1px solid #2a2a2a', flexShrink: 0 }}>
+                <div style={{ fontSize: 9, color: '#777', letterSpacing: 2, marginBottom: 12, whiteSpace: 'nowrap' }}>
                   {inKO ? 'WC 2026 JOURNEY' : 'GROUP STAGE'} · {totalPlayed}/{totalAll}
                 </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', overflowX: 'auto', paddingBottom: 2 }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   {groupDots.map((d, i) => (
                     <div key={`g${i}`} style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', background: d.c, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: '#000', fontWeight: 700 }}>{d.l}</span>
@@ -246,15 +246,15 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
               </div>
 
               {/* Secondary stats — GF / GA / GD only (PLAYED shown in dots counter) */}
-              <div style={{ display: 'flex', flex: 1, alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center' }}>
                 {[
                   { l: 'GOALS FOR',     v: dispGF },
                   { l: 'GOALS AGAINST', v: dispGA },
                   { l: 'GOAL DIFF',     v: dispGD },
                 ].map(({ l, v }) => (
-                  <div key={l} style={{ flex: 1, padding: '18px 10px', textAlign: 'center', borderRight: '1px solid #1a1a1a' }}>
+                  <div key={l} style={{ flexShrink: 0, minWidth: 88, padding: '18px 10px', textAlign: 'center', borderRight: '1px solid #1a1a1a' }}>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: '#888', lineHeight: 1, fontWeight: 700 }}>{v}</div>
-                    <div style={{ fontSize: 9, color: '#666', letterSpacing: 2, marginTop: 6 }}>{l}</div>
+                    <div style={{ fontSize: 9, color: '#666', letterSpacing: 2, marginTop: 6, whiteSpace: 'nowrap' }}>{l}</div>
                   </div>
                 ))}
               </div>
