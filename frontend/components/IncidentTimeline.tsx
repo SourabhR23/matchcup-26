@@ -32,20 +32,20 @@ function EventContent({ inc, align }: { inc: Incident; align: 'left' | 'right' }
     : inc.player
 
   return (
-    <div style={{ textAlign: isRight ? 'left' : 'right' }}>
+    <div style={{ textAlign: isRight ? 'left' : 'right', minWidth: 0, width: '100%' }}>
       {playerName && (
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#f0ece4', lineHeight: 1.3 }}>
+        <div style={{ fontSize: 'clamp(10px, 3vw, 13px)', fontWeight: 700, color: '#f0ece4', lineHeight: 1.3, overflowWrap: 'break-word' }}>
           {playerName}
         </div>
       )}
       {inc.type === 'goal' && inc.assist && (
-        <div style={{ fontSize: 11, color: '#888' }}>assist: {inc.assist}</div>
+        <div style={{ fontSize: 'clamp(9px, 2.5vw, 11px)', color: '#888', overflowWrap: 'break-word' }}>assist: {inc.assist}</div>
       )}
       {inc.type === 'substitution' && inc.player_out && (
-        <div style={{ fontSize: 11, color: '#cc0000' }}>↓ {inc.player_out}</div>
+        <div style={{ fontSize: 'clamp(9px, 2.5vw, 11px)', color: '#cc0000', overflowWrap: 'break-word' }}>↓ {inc.player_out}</div>
       )}
       {inc.type === 'varDecision' && inc.decision && (
-        <div style={{ fontSize: 11, color: '#3b82f6' }}>{inc.decision}</div>
+        <div style={{ fontSize: 'clamp(9px, 2.5vw, 11px)', color: '#3b82f6' }}>{inc.decision}</div>
       )}
     </div>
   )
@@ -85,9 +85,9 @@ export default function IncidentTimeline({ incidents, homeTeam, awayTeam, homeLa
       {/* Column labels */}
       {(homeLabel || awayLabel) && (
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-          <span style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#f0ece4', letterSpacing: 1.5 }}>{homeLabel}</span>
-          <div style={{ width: 72, flexShrink: 0 }} />
-          <span style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#888', letterSpacing: 1.5, textAlign: 'right' }}>{awayLabel}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 'clamp(9px, 2.5vw, 11px)', fontWeight: 800, color: '#f0ece4', letterSpacing: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{homeLabel}</span>
+          <div style={{ width: 'clamp(48px, 16vw, 72px)', flexShrink: 0 }} />
+          <span style={{ flex: 1, minWidth: 0, fontSize: 'clamp(9px, 2.5vw, 11px)', fontWeight: 800, color: '#888', letterSpacing: 1, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{awayLabel}</span>
         </div>
       )}
 
@@ -125,36 +125,36 @@ export default function IncidentTimeline({ incidents, homeTeam, awayTeam, homeLa
           return (
             <div key={idx} style={{ display: 'flex', alignItems: 'center', minHeight: 36 }}>
               {/* Left: home events */}
-              <div style={{ flex: 1, paddingRight: 10, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+              <div style={{ flex: 1, minWidth: 0, paddingRight: 6, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                 {isHome && <EventContent inc={inc} align="left" />}
               </div>
 
               {/* Center badge */}
-              <div style={{ width: 72, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ width: 'clamp(48px, 16vw, 72px)', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <div style={{
                   display: 'inline-flex', alignItems: 'center', gap: 4,
                   background: isGoal ? 'var(--color-accent)' : '#1a1a1a',
                   border: isGoal ? '1px solid var(--color-accent)' : '1px solid #2a2a2a',
-                  padding: '4px 8px',
+                  padding: '4px 6px',
                   borderRadius: 2,
                 }}>
                   <IncidentIcon type={inc.type} cardType={inc.card_type} />
                   <span style={{
-                    fontSize: 11, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                    fontSize: 'clamp(9px, 2.5vw, 11px)', fontWeight: 800, fontVariantNumeric: 'tabular-nums',
                     color: isGoal ? '#f5f0e8' : '#aaa',
                   }}>
                     {minuteLabel(inc)}
                   </span>
                 </div>
                 {isGoal && (
-                  <span style={{ fontSize: 11, fontWeight: 900, color: 'var(--color-accent)', marginTop: 3 }}>
+                  <span style={{ fontSize: 'clamp(9px, 2.5vw, 11px)', fontWeight: 900, color: 'var(--color-accent)', marginTop: 3 }}>
                     {inc.home_score}–{inc.away_score}
                   </span>
                 )}
               </div>
 
               {/* Right: away events */}
-              <div style={{ flex: 1, paddingLeft: 10, display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
+              <div style={{ flex: 1, minWidth: 0, paddingLeft: 6, display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
                 {!isHome && <EventContent inc={inc} align="right" />}
               </div>
             </div>

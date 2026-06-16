@@ -17,7 +17,7 @@ export default function Topbar() {
       style={{ height: 'var(--topbar-height)' }}
       className="bg-ink flex items-center justify-between px-5 sticky top-0 z-50"
     >
-      <Link href="/" className="font-display text-bg text-xl tracking-[4px] hover:text-accent transition-colors">
+      <Link href="/" className="font-display text-bg text-base sm:text-xl tracking-[2px] sm:tracking-[4px] hover:text-accent transition-colors flex-shrink-0">
         MATCHDAY
       </Link>
 
@@ -31,7 +31,7 @@ export default function Topbar() {
               key={item.href}
               href={item.href}
               className={[
-                'text-[10px] px-[14px] py-[7px] tracking-[1.5px] font-body transition-colors',
+                'text-[9px] sm:text-[10px] px-[8px] sm:px-[14px] py-[7px] tracking-[1px] sm:tracking-[1.5px] font-body transition-colors',
                 i < NAV.length - 1 ? 'border-r border-r-[#222]' : '',
                 active ? 'text-accent' : 'text-[#555] hover:text-accent',
               ].join(' ')}
@@ -46,9 +46,9 @@ export default function Topbar() {
         })}
       </nav>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-shrink-0">
         <span className="live-dot text-danger" />
-        <span className="text-[10px] text-[#444] tracking-[1px]">WC 2026</span>
+        <span className="hidden sm:inline text-[10px] text-[#444] tracking-[1px]">WC 2026</span>
       </div>
     </header>
   )

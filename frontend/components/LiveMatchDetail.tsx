@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import styles from './LiveMatchDetail.module.css'
 import { getAbbrev } from '@/lib/flags'
 import FlagImg from '@/components/FlagImg'
 import MatchTabs from '@/components/MatchTabs'
@@ -301,19 +302,19 @@ export default function LiveMatchDetail({ eventId }: { eventId: number }) {
         {/* Teams + score */}
         <div style={{ display: 'flex', alignItems: 'center', position: 'relative', zIndex: 1, gap: 0, marginBottom: 8 }}>
           {/* Home */}
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ marginBottom: 8 }}><FlagImg country={detail.home_team} width={48} cdnSize={80} /></div>
             <div style={{ fontSize: 11, color: '#555', letterSpacing: '2.5px', marginBottom: 2 }}>{homeAbbr}</div>
-            <div className="font-display" style={{ fontSize: 52, color: '#f5f0e8', lineHeight: 1, letterSpacing: 2 }}>
+            <div className={`font-display ${styles.teamName}`}>
               {detail.home_team.toUpperCase()}
             </div>
           </div>
 
           {/* Score */}
-          <div style={{ textAlign: 'center', padding: '0 16px', minWidth: 100 }}>
+          <div className={styles.scoreBlock}>
             {hasScore ? (
               <>
-                <div className="font-display" style={{ fontSize: 72, color: 'var(--color-accent)', lineHeight: 1, letterSpacing: 4 }}>
+                <div className={`font-display ${styles.scoreNum}`}>
                   {detail.home_score}–{detail.away_score}
                 </div>
                 {detail.home_score_ht != null && (
@@ -328,10 +329,10 @@ export default function LiveMatchDetail({ eventId }: { eventId: number }) {
           </div>
 
           {/* Away */}
-          <div style={{ flex: 1, textAlign: 'right' }}>
+          <div style={{ flex: 1, textAlign: 'right', minWidth: 0 }}>
             <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}><FlagImg country={detail.away_team} width={48} cdnSize={80} /></div>
             <div style={{ fontSize: 11, color: '#555', letterSpacing: '2.5px', marginBottom: 2 }}>{awayAbbr}</div>
-            <div className="font-display" style={{ fontSize: 52, color: '#f5f0e8', lineHeight: 1, letterSpacing: 2 }}>
+            <div className={`font-display ${styles.teamName}`}>
               {detail.away_team.toUpperCase()}
             </div>
           </div>

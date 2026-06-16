@@ -208,7 +208,7 @@ export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, 
               {factRows.map(([k, v]) => (
                 <div key={k} style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', padding:'6px 0', gap:12 }}>
                   <span style={{ fontSize:13, color:'#666', flexShrink:0 }}>{k}</span>
-                  <span style={{ fontSize:13, fontWeight:600, color:'#f0ece4', textAlign:'right' }}>{v}</span>
+                  <span style={{ fontSize:13, fontWeight:600, color:'#f0ece4', textAlign:'right', minWidth:0, overflowWrap:'break-word' }}>{v}</span>
                 </div>
               ))}
             </>
