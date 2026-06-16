@@ -1,0 +1,15 @@
+.fadeWrap {
+  position: relative;
+}
+.fadeWrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  background: linear-gradient(to right, transparent, var(--fade-bg, #0a0a0a));
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 2;
+}

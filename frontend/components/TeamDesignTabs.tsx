@@ -1,5 +1,6 @@
 ﻿import Link from 'next/link'
 import FlagImg from '@/components/FlagImg'
+import fadeStyles from './ScrollFade.module.css'
 
 export interface TeamResult {
   id: number
@@ -195,7 +196,7 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
         const totalAll    = totalPlayed + p.upcomingMatches.length
 
         return (
-          <div style={{ borderBottom: '1px solid #1e1e1e', background: '#0a0a0a' }}>
+          <div className={fadeStyles.fadeWrap} style={{ borderBottom: '1px solid #1e1e1e', background: '#0a0a0a', '--fade-bg': '#0a0a0a' } as React.CSSProperties}>
             <div style={{ display: 'flex', alignItems: 'stretch', overflowX: 'auto' }}>
 
               {/* Left hero: Group rank (frozen) + Points or Stage */}
@@ -268,6 +269,7 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
       {p.matchStatRows.length > 0 && (
         <div style={{ background: '#0d0d0d', borderTop: `3px solid ${accent}`, borderBottom: `3px solid ${accent}`, padding: 24 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, letterSpacing: 3, color: accent, marginBottom: 16 }}>WC 2026 PERFORMANCE</div>
+          <div className={fadeStyles.fadeWrap} style={{ '--fade-bg': '#0d0d0d' } as React.CSSProperties}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 640 }}>
               <thead>
@@ -325,6 +327,7 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
                 })}
               </tbody>
             </table>
+          </div>
           </div>
           <div style={{ fontSize: 9, color: '#666', marginTop: 12, letterSpacing: 1 }}>
             POSS = Possession · ON TGT = Shots on Target · xG = Expected Goals · YC = Yellow Cards · RC = Red Cards · PASS% = Pass Accuracy · CHANCES = Big Chances

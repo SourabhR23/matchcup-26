@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import styles from './MatchTabs.module.css'
+import fadeStyles from './ScrollFade.module.css'
 import FlagImg from './FlagImg'
 import { buildPlayerFlags } from './match/lineup/pitchUtils'
 import LineupPitchView from './match/lineup/LineupPitchView'
@@ -77,13 +78,15 @@ export default function MatchTabs({
     <div style={{ background: '#f5f0e8' }}>
 
       {/* ── Tab bar ── */}
-      <div className={styles.tabBar} style={{ background: '#fff', borderBottom: '1px solid #e8e2d8', paddingLeft: 4 }}>
-        {tabBtn('overview', 'Overview')}
-        {tabBtn('lineups', 'Lineups')}
-        {(!isLive || hasStats || bsdStats) && tabBtn('stats', 'Stats')}
-        {bsdStats && tabBtn('analysis', 'Analysis')}
-        {groupStandings && groupStandings.length > 0 && tabBtn('standings', 'Standings')}
-        {prediction && tabBtn('prediction', 'Prediction')}
+      <div className={fadeStyles.fadeWrap} style={{ '--fade-bg': '#fff' } as React.CSSProperties}>
+        <div className={styles.tabBar} style={{ background: '#fff', borderBottom: '1px solid #e8e2d8', paddingLeft: 4 }}>
+          {tabBtn('overview', 'Overview')}
+          {tabBtn('lineups', 'Lineups')}
+          {(!isLive || hasStats || bsdStats) && tabBtn('stats', 'Stats')}
+          {bsdStats && tabBtn('analysis', 'Analysis')}
+          {groupStandings && groupStandings.length > 0 && tabBtn('standings', 'Standings')}
+          {prediction && tabBtn('prediction', 'Prediction')}
+        </div>
       </div>
 
       {/* ── Overview ── */}
