@@ -40,16 +40,21 @@ export default function UpcomingRow({ event }: Props) {
       </span>
 
       {/* Teams */}
-      <div className="flex-1">
-        <div className="flex items-center gap-2 text-[13px] font-medium text-ink flex-wrap">
-          <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #e0dbd0', background: '#f5f0e8', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <FlagImg country={event.home_team} width={32} />
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2 text-[13px] font-medium text-ink">
+          <div className="flex items-center gap-2 min-w-0">
+            <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #e0dbd0', background: '#f5f0e8', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <FlagImg country={event.home_team} width={32} />
+            </div>
+            <span className="truncate">{event.home_team}</span>
+            <span className="text-[#ccc] font-normal sm:hidden flex-shrink-0">vs</span>
           </div>
-          <span>{event.home_team}</span>
-          <span className="text-[#ccc] font-normal">vs</span>
-          <span>{event.away_team}</span>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #e0dbd0', background: '#f5f0e8', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <FlagImg country={event.away_team} width={32} />
+          <span className="text-[#ccc] font-normal hidden sm:inline flex-shrink-0">vs</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #e0dbd0', background: '#f5f0e8', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <FlagImg country={event.away_team} width={32} />
+            </div>
+            <span className="truncate">{event.away_team}</span>
           </div>
         </div>
         <div className="text-[10px] text-[#999] mt-0.5 tracking-[0.5px]">
