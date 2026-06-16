@@ -68,7 +68,7 @@ function isPlaceholderTeam(name: string): boolean {
 
 function formatTime(dateStr: string) {
   return new Date(dateStr).toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit', hour12: false,
+    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC',
   })
 }
 
@@ -97,7 +97,7 @@ function TeamBadge({ country, dark = true }: { country: string; dark?: boolean }
 
 /* ─── Card: Completed ─────────────────────────────────────── */
 function CompletedCard({ ev }: { ev: MatchRow }) {
-  const date = new Date(ev.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const date = new Date(ev.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   return (
     <Link href={`/matches/${ev.id}`} className="match-card block hover:opacity-90 transition-opacity">
       <div className="flex justify-between items-center mb-2">
@@ -277,24 +277,22 @@ export default function MatchesPage() {
     .filter((t) => !isPlaceholderTeam(t))
     .sort()
 
+  // Group by UTC calendar date (ISO "YYYY-MM-DD") — avoids local-timezone date shifting
   const byDate: Record<string, MatchRow[]> = {}
   for (const ev of sorted) {
-    const dk = new Date(ev.event_date).toDateString()
+    const dk = new Date(ev.event_date).toISOString().slice(0, 10)
     if (!byDate[dk]) byDate[dk] = []
     byDate[dk].push(ev)
   }
-  const dates = Object.keys(byDate).sort(
-    (a, b) => new Date(a).getTime() - new Date(b).getTime()
-  )
+  const dates = Object.keys(byDate).sort()
 
   const liveCount = Object.keys(liveMap).length
 
   useEffect(() => {
     if (scrolledToToday || loading || dates.length === 0) return
-    const todayStr = new Date().toDateString()
-    const todayMs  = new Date(todayStr).getTime()
+    const todayStr = new Date().toISOString().slice(0, 10)
     const targetKey = dates.find((d) => d === todayStr)
-      ?? dates.find((d) => new Date(d).getTime() >= todayMs)
+      ?? dates.find((d) => d >= todayStr)
       ?? dates[dates.length - 1]
     const el = document.getElementById(`date-${targetKey}`)
     if (el) el.scrollIntoView({ block: 'start' })
@@ -385,7 +383,7 @@ export default function MatchesPage() {
       {dates.map((dk) => {
         const dayEvents = byDate[dk]
         const label = new Date(dk).toLocaleDateString('en-US', {
-          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
         })
         const liveInDay      = dayEvents.filter((e) => e.status === 'inprogress' || e.status === 'live')
         const completedInDay = dayEvents.filter((e) => e.status === 'finished')

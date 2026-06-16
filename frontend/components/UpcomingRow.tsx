@@ -7,19 +7,22 @@ interface Props {
 }
 
 function formatTime(dateStr: string) {
-  const d = new Date(dateStr)
+  const d   = new Date(dateStr)
   const now = new Date()
-  const isToday = d.toDateString() === now.toDateString()
-  const isTomorrow = d.toDateString() === new Date(now.getTime() + 86400000).toDateString()
-  const hours = d.getHours()
+
+  // Compare calendar dates in UTC — matches event_date convention used everywhere else in the app
+  const utcDateStr = (dt: Date) => dt.toLocaleDateString('en-US', { timeZone: 'UTC' })
+  const isToday     = utcDateStr(d) === utcDateStr(now)
+  const isTomorrow  = utcDateStr(d) === utcDateStr(new Date(now.getTime() + 86400000))
+  const utcHours    = d.getUTCHours()
 
   return {
-    time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+    time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }),
     badge: isToday
-      ? (hours >= 20 ? 'LATE' : 'TODAY')
+      ? (utcHours >= 20 ? 'LATE' : 'TODAY')
       : isTomorrow
       ? 'TOMORROW'
-      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
   }
 }
 
