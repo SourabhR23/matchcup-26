@@ -144,11 +144,11 @@ export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, 
             : <IncidentTimeline incidents={incidents} homeTeam={homeTeam} awayTeam={awayTeam} homeLabel={homeAbbr} awayLabel={awayAbbr} />}
         </div>
         {/* Players + facts — dark background */}
-        <div style={{ background:'#0d0d0d', padding:'18px 18px 16px' }}>
+        <div style={{ background:'#0d0d0d', padding:'18px 18px 16px', minWidth:0, overflow:'hidden' }}>
           {(home.length > 0 || away.length > 0) && (
             <>
               <div style={{ fontSize:14, letterSpacing:3, fontWeight:800, color:'var(--color-accent)', paddingBottom:8, marginBottom:14, borderBottom:'2px solid var(--color-accent)' }}>TOP PLAYERS</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1px 1fr', gap:'0 16px', marginBottom:20 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) 1px minmax(0,1fr)', gap:'0 16px', marginBottom:20 }}>
                 <div>
                   <div style={{ fontSize:13, fontWeight:700, color:'#888', letterSpacing:1.5, marginBottom:8 }}>{homeTeam.toUpperCase()}</div>
                   {home.map((p, i) => {
