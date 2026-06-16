@@ -113,13 +113,13 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
       {/* ── Hero Banner ── */}
       <div style={{ background: `linear-gradient(135deg, #0d0d0d 40%, ${accent}22 100%)`, borderBottom: `3px solid ${accent}`, padding: '32px 24px' }}>
         <div className="flex items-end justify-between gap-6 flex-wrap">
-          <div className="flex items-center gap-5">
-            <FlagImg country={p.teamName} width={96} cdnSize={160} style={{ borderRadius: 4, boxShadow: `0 0 32px ${accent}55` }} />
-            <div>
+          <div className="flex items-center gap-5" style={{ minWidth: 0, flex: '1 1 auto' }}>
+            <FlagImg country={p.teamName} width={96} cdnSize={160} style={{ borderRadius: 4, boxShadow: `0 0 32px ${accent}55`, flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 11, letterSpacing: 4, color: accent, fontWeight: 700, marginBottom: 4 }}>
                 {p.group}{p.groupRank > 0 ? ` · ${ordinal(p.groupRank)} IN GROUP` : ''} · FIFA WORLD CUP 2026
               </div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 56, lineHeight: 1, letterSpacing: 2, color: '#fff' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px, 7vw, 56px)', lineHeight: 1.1, letterSpacing: 2, color: '#fff', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
                 {p.teamName.toUpperCase()}
               </div>
               <div style={{ fontSize: 13, color: '#888', marginTop: 8 }}>
