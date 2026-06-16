@@ -66,10 +66,33 @@ function isPlaceholderTeam(name: string): boolean {
   return PLACEHOLDER_RE.test((name || '').trim())
 }
 
-function formatTime(dateStr: string) {
+/**
+ * useUTC=true is used for the very first render (matches server-rendered HTML
+ * exactly, since the server doesn't know the viewer's timezone) — avoids a
+ * React hydration mismatch. After mount, useUTC=false switches every date/time
+ * computation on this page to the viewer's actual local timezone.
+ */
+function formatTime(dateStr: string, useUTC: boolean) {
   return new Date(dateStr).toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+    ...(useUTC ? { timeZone: 'UTC' } : {}),
   })
+}
+
+/* "YYYY-MM-DD" calendar-day key — UTC or local depending on mode */
+function dateKey(input: Date | string, useUTC: boolean): string {
+  const d = typeof input === 'string' ? new Date(input) : input
+  if (useUTC) return d.toISOString().slice(0, 10)
+  const y   = d.getFullYear()
+  const m   = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/* Reverse of dateKey — rebuilds a Date that formats back to the same calendar day */
+function dateKeyToDate(dk: string, useUTC: boolean): Date {
+  const [y, m, day] = dk.split('-').map(Number)
+  return useUTC ? new Date(Date.UTC(y, m - 1, day)) : new Date(y, m - 1, day)
 }
 
 function liveMinuteLabel(ev: MatchRow): string {
@@ -96,8 +119,8 @@ function TeamBadge({ country, dark = true }: { country: string; dark?: boolean }
 }
 
 /* ─── Card: Completed ─────────────────────────────────────── */
-function CompletedCard({ ev }: { ev: MatchRow }) {
-  const date = new Date(ev.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+function CompletedCard({ ev, useUTC }: { ev: MatchRow; useUTC: boolean }) {
+  const date = new Date(ev.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(useUTC ? { timeZone: 'UTC' } : {}) })
   return (
     <Link href={`/matches/${ev.id}`} className="match-card block hover:opacity-90 transition-opacity">
       <div className="flex justify-between items-center mb-2">
@@ -189,8 +212,8 @@ function LiveCard({ ev }: { ev: MatchRow }) {
 }
 
 /* ─── Card: Upcoming ──────────────────────────────────────── */
-function UpcomingCard({ ev }: { ev: MatchRow }) {
-  const time = formatTime(ev.event_date)
+function UpcomingCard({ ev, useUTC }: { ev: MatchRow; useUTC: boolean }) {
+  const time = formatTime(ev.event_date, useUTC)
   return (
     <div className="flex items-center gap-3 px-4 py-3 bg-white border border-[#e8e2d8] hover:border-[#111] transition-colors">
       {/* Home */}
@@ -228,6 +251,9 @@ export default function MatchesPage() {
   const [teamFilter,   setTeamFilter]   = useState('all')
   const [loading,      setLoading]      = useState(true)
   const [scrolledToToday, setScrolledToToday] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+  const useUTC = !mounted
 
   useEffect(() => {
     fetch('/api/events')
@@ -277,10 +303,10 @@ export default function MatchesPage() {
     .filter((t) => !isPlaceholderTeam(t))
     .sort()
 
-  // Group by UTC calendar date (ISO "YYYY-MM-DD") — avoids local-timezone date shifting
+  // Group by calendar date — UTC before mount (matches server render), local after
   const byDate: Record<string, MatchRow[]> = {}
   for (const ev of sorted) {
-    const dk = new Date(ev.event_date).toISOString().slice(0, 10)
+    const dk = dateKey(ev.event_date, useUTC)
     if (!byDate[dk]) byDate[dk] = []
     byDate[dk].push(ev)
   }
@@ -290,14 +316,14 @@ export default function MatchesPage() {
 
   useEffect(() => {
     if (scrolledToToday || loading || dates.length === 0) return
-    const todayStr = new Date().toISOString().slice(0, 10)
+    const todayStr = dateKey(new Date(), useUTC)
     const targetKey = dates.find((d) => d === todayStr)
       ?? dates.find((d) => d >= todayStr)
       ?? dates[dates.length - 1]
     const el = document.getElementById(`date-${targetKey}`)
     if (el) el.scrollIntoView({ block: 'start' })
     setScrolledToToday(true)
-  }, [loading, dates, scrolledToToday])
+  }, [loading, dates, scrolledToToday, useUTC])
 
   return (
     <div>
@@ -382,8 +408,9 @@ export default function MatchesPage() {
 
       {dates.map((dk) => {
         const dayEvents = byDate[dk]
-        const label = new Date(dk).toLocaleDateString('en-US', {
-          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
+        const label = dateKeyToDate(dk, useUTC).toLocaleDateString('en-US', {
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+          ...(useUTC ? { timeZone: 'UTC' } : {}),
         })
         const liveInDay      = dayEvents.filter((e) => e.status === 'inprogress' || e.status === 'live')
         const completedInDay = dayEvents.filter((e) => e.status === 'finished')
@@ -409,13 +436,13 @@ export default function MatchesPage() {
 
             {completedInDay.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                {completedInDay.map((ev) => <CompletedCard key={ev.id} ev={ev} />)}
+                {completedInDay.map((ev) => <CompletedCard key={ev.id} ev={ev} useUTC={useUTC} />)}
               </div>
             )}
 
             {upcomingInDay.length > 0 && (
               <div className="flex flex-col border border-[#e8e2d8] overflow-hidden divide-y divide-[#e8e2d8]">
-                {upcomingInDay.map((ev) => <UpcomingCard key={ev.id} ev={ev} />)}
+                {upcomingInDay.map((ev) => <UpcomingCard key={ev.id} ev={ev} useUTC={useUTC} />)}
               </div>
             )}
           </div>

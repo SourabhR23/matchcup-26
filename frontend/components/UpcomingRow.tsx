@@ -1,3 +1,6 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import FlagImg from '@/components/FlagImg'
 import type { MatchEvent } from '@/lib/types'
@@ -6,28 +9,37 @@ interface Props {
   event: MatchEvent
 }
 
-function formatTime(dateStr: string) {
+/**
+ * useUTC=true is used for the very first render (matches server-rendered HTML
+ * exactly, since the server doesn't know the viewer's timezone) — this avoids
+ * a React hydration mismatch. After mount, useUTC=false switches to the
+ * viewer's actual local timezone.
+ */
+function formatTime(dateStr: string, useUTC: boolean) {
   const d   = new Date(dateStr)
   const now = new Date()
+  const tz  = useUTC ? { timeZone: 'UTC' } : {}
 
-  // Compare calendar dates in UTC — matches event_date convention used everywhere else in the app
-  const utcDateStr = (dt: Date) => dt.toLocaleDateString('en-US', { timeZone: 'UTC' })
-  const isToday     = utcDateStr(d) === utcDateStr(now)
-  const isTomorrow  = utcDateStr(d) === utcDateStr(new Date(now.getTime() + 86400000))
-  const utcHours    = d.getUTCHours()
+  const dayStr    = (dt: Date) => dt.toLocaleDateString('en-US', tz)
+  const isToday    = dayStr(d) === dayStr(now)
+  const isTomorrow = dayStr(d) === dayStr(new Date(now.getTime() + 86400000))
+  const hours      = useUTC ? d.getUTCHours() : d.getHours()
 
   return {
-    time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }),
+    time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, ...tz }),
     badge: isToday
-      ? (utcHours >= 20 ? 'LATE' : 'TODAY')
+      ? (hours >= 20 ? 'LATE' : 'TODAY')
       : isTomorrow
       ? 'TOMORROW'
-      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...tz }),
   }
 }
 
 export default function UpcomingRow({ event }: Props) {
-  const { time, badge } = formatTime(event.event_date)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  const { time, badge } = formatTime(event.event_date, !mounted)
 
   return (
     <Link
