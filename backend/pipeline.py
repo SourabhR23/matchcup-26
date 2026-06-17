@@ -7,6 +7,8 @@ Usage (run from FIFA26/ folder):
   python backend/pipeline.py --id 8291 8292  # Force-collect specific events
   python backend/pipeline.py --all           # Re-collect every match in Supabase
   python backend/pipeline.py --force         # Re-collect even if already finished
+  python backend/pipeline.py --populate      # Fetch managers + venues from BSD → Supabase
+  python backend/pipeline.py --schema        # Print SQL to run in Supabase dashboard
 
 Requires: pip install requests python-dotenv supabase
 """
@@ -89,6 +91,67 @@ def flatten_player_stats(raw):
                 return raw[key]
     return []
 
+# ── Populate reference tables ─────────────────────────────────────────────────
+def populate_managers():
+    """Fetch all WC2026 managers from BSD and upsert into the managers table."""
+    print('\n  Fetching managers from BSD …')
+    data = get(f'/api/v2/managers/?league_id=27&season_id=188')
+    if not data:
+        print('    FAILED: cannot reach managers endpoint'); return
+    results = data.get('results', []) if isinstance(data, dict) else data
+    print(f'  {len(results)} manager(s) returned')
+    rows = []
+    for m in results:
+        rows.append({
+            'id':                ni(m.get('id')),
+            'name':              nv(m.get('name')),
+            'short_name':        nv(m.get('short_name')),
+            'nationality':       nv(m.get('country')),
+            'tactical_profile':  nv(m.get('tactical_profile')),
+            'preferred_formation': nv(m.get('preferred_formation')),
+            'current_team_id':   ni(m.get('current_team_id')),
+            'career_matches':    ni(m.get('matches_total')),
+            'career_wins':       ni(m.get('wins')),
+            'career_draws':      ni(m.get('draws')),
+            'career_losses':     ni(m.get('losses')),
+            'win_rate':          nf(m.get('win_pct')),
+            'avg_goals_scored':  nf(m.get('avg_goals_scored')),
+            'avg_goals_conceded': nf(m.get('avg_goals_conceded')),
+            'updated_at':        nv(m.get('stats_updated_at')),
+        })
+    if rows:
+        upsert('managers', rows, 'id', label='(WC2026 managers)')
+    return len(rows)
+
+
+def populate_venues():
+    """Fetch each venue referenced in matches from BSD and upsert into venues table."""
+    print('\n  Fetching distinct venue_ids from Supabase …')
+    res = sb.table('matches').select('venue_id').execute()
+    ids = {r['venue_id'] for r in (res.data or []) if r.get('venue_id')}
+    print(f'  {len(ids)} unique venue_id(s)')
+    rows = []
+    for vid in sorted(ids):
+        v = get(f'/api/v2/venues/{vid}/')
+        if not v:
+            print(f'    SKIP venue {vid}: not found'); continue
+        rows.append({
+            'id':         ni(v.get('id')),
+            'name':       nv(v.get('name')),
+            'city':       nv(v.get('city')),
+            'country':    nv(v.get('country')),
+            'capacity':   ni(v.get('capacity')),
+            'latitude':   nf(v.get('latitude')),
+            'longitude':  nf(v.get('longitude')),
+            'built_year': ni(v.get('built_year')),
+        })
+        print(f'    {vid}: {v.get("name")}, {v.get("city")} (cap {v.get("capacity")})')
+        time.sleep(DELAY)
+    if rows:
+        upsert('venues', rows, 'id', label='(WC2026 venues)')
+    return len(rows)
+
+
 # ── Supabase upsert helper ────────────────────────────────────────────────────
 def upsert(table: str, rows: list, on_conflict: str, label: str = ''):
     if not rows:
@@ -134,6 +197,11 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         ref = {'name': ref}
     weather = detail.get('weather') or {}
 
+    # Coach IDs — BSD returns home_coach_id / away_coach_id as top-level ints
+    home_coach_id = ni(detail.get('home_coach_id'))
+    away_coach_id = ni(detail.get('away_coach_id'))
+
+    # Coach name objects (fallback if BSD ever returns name directly)
     home_coach = detail.get('home_coach') or {}
     away_coach = detail.get('away_coach') or {}
     if isinstance(home_coach, str): home_coach = {'name': home_coach}
@@ -166,24 +234,40 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         'referee_name':     nv(ref.get('name') or detail.get('referee_name')),
         'home_coach':       nv(home_coach.get('name')),
         'away_coach':       nv(away_coach.get('name')),
+        'home_coach_id':    home_coach_id,
+        'away_coach_id':    away_coach_id,
         'attendance':       ni(detail.get('attendance')),
         'temperature_c':    nf(weather.get('temperature_c') or detail.get('temperature_c')),
         'wind_speed':       nf(weather.get('wind_speed') or detail.get('wind_speed')),
     }
-    try:
-        sb.table('matches').upsert([match_row], on_conflict='id').execute()
-        print(f'    OK  matches — 1 row(s)')
-    except Exception as e:
-        if '23503' in str(e) or 'referee_id' in str(e):
-            # referee not in referees table — retry without FK field
-            match_row['referee_id'] = None
-            try:
-                sb.table('matches').upsert([match_row], on_conflict='id').execute()
-                print(f'    OK  matches — 1 row(s) (referee_id cleared)')
-            except Exception as e2:
-                print(f'    ERR matches — {e2}')
-        else:
-            print(f'    ERR matches — {e}')
+    def _upsert_match(row):
+        try:
+            sb.table('matches').upsert([row], on_conflict='id').execute()
+            print(f'    OK  matches — 1 row(s)')
+            return
+        except Exception as e:
+            es = str(e)
+            # PostgREST schema cache hasn't picked up new columns yet — strip them and retry
+            if 'PGRST204' in es or 'home_coach_id' in es or 'away_coach_id' in es:
+                row = {k: v for k, v in row.items() if k not in ('home_coach_id', 'away_coach_id')}
+                try:
+                    sb.table('matches').upsert([row], on_conflict='id').execute()
+                    print(f'    OK  matches — 1 row(s) (coach_id cols not in cache yet)')
+                    return
+                except Exception as e2:
+                    es = str(e2)
+            if '23503' in es or 'referee_id' in es:
+                row['referee_id'] = None
+                try:
+                    sb.table('matches').upsert([row], on_conflict='id').execute()
+                    print(f'    OK  matches — 1 row(s) (referee_id cleared)')
+                    return
+                except Exception as e3:
+                    print(f'    ERR matches — {e3}')
+            else:
+                print(f'    ERR matches — {es}')
+
+    _upsert_match(dict(match_row))
     time.sleep(DELAY)
 
     # ── 2. player_match_stats ──
@@ -408,16 +492,34 @@ def run_serve(interval: int = 300):
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description='FIFA WC 2026 — BSD → Supabase match pipeline')
-    parser.add_argument('--serve',  action='store_true', help='Web service mode: runs scheduler loop + HTTP health check (for Render free tier)')
+    parser.add_argument('--serve',    action='store_true', help='Web service mode: runs scheduler loop + HTTP health check (for Render free tier)')
     parser.add_argument('--interval', type=int, default=300, help='Seconds between collection runs in --serve mode (default: 300)')
-    parser.add_argument('--cron',   action='store_true', help='Single cron run: auto-detect + collect newly finished matches')
-    parser.add_argument('--id',     type=int, nargs='+',  help='Collect specific event ID(s)')
-    parser.add_argument('--all',    action='store_true',  help='Re-collect all matches in Supabase')
-    parser.add_argument('--force',  action='store_true',  help='Re-collect even if already finished in Supabase')
+    parser.add_argument('--cron',     action='store_true', help='Single cron run: auto-detect + collect newly finished matches')
+    parser.add_argument('--id',       type=int, nargs='+', help='Collect specific event ID(s)')
+    parser.add_argument('--all',      action='store_true', help='Re-collect all matches in Supabase')
+    parser.add_argument('--force',    action='store_true', help='Re-collect even if already finished in Supabase')
+    parser.add_argument('--populate', action='store_true', help='Fetch all WC2026 managers + venues from BSD → Supabase reference tables')
+    parser.add_argument('--schema',   action='store_true', help='Print SQL to run in Supabase dashboard to add coach ID columns')
     args = parser.parse_args()
 
     print(f'Supabase: {SUPABASE_URL}')
     print(f'BSD API:  {BSD_BASE}\n')
+
+    if args.schema:
+        print("-- Run this SQL in your Supabase dashboard (SQL Editor):\n")
+        print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS home_coach_id INTEGER REFERENCES managers(id);")
+        print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS away_coach_id INTEGER REFERENCES managers(id);")
+        print()
+        print("-- FK from venue_id to venues (needed for PostgREST join in frontend)")
+        print("ALTER TABLE matches ADD CONSTRAINT IF NOT EXISTS fk_matches_venue")
+        print("  FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE SET NULL;")
+        return
+
+    if args.populate:
+        m = populate_managers()
+        v = populate_venues()
+        print(f'\nPopulate done — {m} manager(s), {v} venue(s) upserted.')
+        return
 
     if args.serve:
         run_serve(interval=args.interval)

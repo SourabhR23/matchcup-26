@@ -15,9 +15,35 @@ const BSD_BASE  = 'https://sports.bzzoiro.com'
 const BSD_TOKEN = process.env.BSD_TOKEN ?? ''
 const BSD_HDR   = { Authorization: `Token ${BSD_TOKEN}` }
 
+/* ── FK join select string — used by getEvents + getMatchDetail ── */
+const MATCH_SELECT = `
+  *,
+  venue_detail:venues!venue_id(id, name, city, country, capacity),
+  home_manager:managers!home_coach_id(id, name, short_name, nationality),
+  away_manager:managers!away_coach_id(id, name, short_name, nationality)
+`.trim()
+
 /* ── Map flat Supabase matches row → MatchEvent ── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToEvent(r: any): MatchEvent {
+  // venue: prefer FK-joined object, fall back to flat columns
+  const vd = r.venue_detail
+  const venue = vd
+    ? { id: vd.id, name: vd.name ?? '', city: vd.city ?? '', country: vd.country ?? '', capacity: vd.capacity ?? undefined }
+    : (r.venue_id || r.venue_name)
+      ? { id: r.venue_id ?? 0, name: r.venue_name ?? '', city: r.venue_city ?? '', country: '', capacity: undefined }
+      : null
+
+  // coaches: prefer FK-joined manager objects, fall back to flat text columns
+  const hm = r.home_manager
+  const am = r.away_manager
+  const home_coach = hm
+    ? { id: hm.id, name: hm.name ?? '', short_name: hm.short_name ?? '', country: hm.nationality ?? '' }
+    : r.home_coach ? { id: 0, name: r.home_coach, short_name: '', country: '' } : null
+  const away_coach = am
+    ? { id: am.id, name: am.name ?? '', short_name: am.short_name ?? '', country: am.nationality ?? '' }
+    : r.away_coach ? { id: 0, name: r.away_coach, short_name: '', country: '' } : null
+
   return {
     id:             r.id,
     home_team:      r.home_team_name ?? '',
@@ -37,10 +63,10 @@ function rowToEvent(r: any): MatchEvent {
     away_score_ht:  r.away_score_ht  ?? null,
     period:         null,
     current_minute: null,
-    venue:          (r.venue_id || r.venue_name) ? { id: r.venue_id ?? 0, name: r.venue_name ?? '', city: r.venue_city ?? '', country: '', capacity: 0 } : null,
+    venue,
     referee:        (r.referee_id || r.referee_name) ? { id: r.referee_id ?? 0, name: r.referee_name ?? '', country: '', career_games: 0, career_yellow_cards: 0, career_red_cards: 0 } : null,
-    home_coach:     r.home_coach ? { id: 0, name: r.home_coach, short_name: '', country: '' } : null,
-    away_coach:     r.away_coach ? { id: 0, name: r.away_coach, short_name: '', country: '' } : null,
+    home_coach,
+    away_coach,
     actual_home_xg: r.home_xg   ?? null,
     actual_away_xg: r.away_xg   ?? null,
     home_xg_live:   null,
@@ -66,7 +92,7 @@ function rowToEvent(r: any): MatchEvent {
 export async function getEvents(): Promise<MatchEvent[]> {
   const { data, error } = await supabaseServer
     .from('matches')
-    .select('*')
+    .select(MATCH_SELECT)
     .order('event_date', { ascending: true })
   if (error || !data) return []
   return data.map(rowToEvent)
@@ -136,7 +162,7 @@ export async function getRoster(teamId: number): Promise<Player[]> {
 export async function getMatchDetail(eventId: number): Promise<MatchDetail | null> {
   const { data, error } = await supabaseServer
     .from('matches')
-    .select('*')
+    .select(MATCH_SELECT)
     .eq('id', eventId)
     .single()
   if (error || !data || data.status !== 'finished') return null
