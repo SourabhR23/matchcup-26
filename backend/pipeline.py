@@ -124,6 +124,33 @@ def populate_managers():
     return len(rows)
 
 
+def populate_referees():
+    """Fetch all WC2026 referees from BSD and backfill referee_name in matches."""
+    print('\n  Fetching referees from BSD …')
+    data = get('/api/v2/referees/?league_id=27&season_id=188')
+    if not data:
+        print('    FAILED: cannot reach referees endpoint'); return 0
+    results = data.get('results', []) if isinstance(data, dict) else data
+    print(f'  {len(results)} referee(s) returned')
+    lookup = {}
+    for r in results:
+        rid = ni(r.get('id'))
+        name = nv(r.get('name'))
+        if rid and name:
+            lookup[rid] = name
+    updated = 0
+    for rid, name in lookup.items():
+        try:
+            sb.table('matches').update({'referee_name': name}).eq('referee_id', rid).execute()
+            print(f'    {rid}: {name}')
+            updated += 1
+        except Exception as e:
+            print(f'    ERR referee {rid}: {e}')
+        time.sleep(0.1)
+    print(f'    Updated referee_name for {updated} referee(s) across all matches')
+    return updated
+
+
 def populate_venues():
     """Fetch each venue referenced in matches from BSD and upsert into venues table."""
     print('\n  Fetching distinct venue_ids from Supabase …')
@@ -518,7 +545,8 @@ def main():
     if args.populate:
         m = populate_managers()
         v = populate_venues()
-        print(f'\nPopulate done — {m} manager(s), {v} venue(s) upserted.')
+        r = populate_referees()
+        print(f'\nPopulate done — {m} manager(s), {v} venue(s), {r} referee(s) updated.')
         return
 
     if args.serve:

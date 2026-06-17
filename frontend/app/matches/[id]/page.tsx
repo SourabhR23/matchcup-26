@@ -402,8 +402,8 @@ export default async function MatchDetailPage({ params }: Params) {
             {homeFormation && awayFormation && (
               <span style={pill}>{homeFormation} vs {awayFormation}</span>
             )}
-            {detail.weather && (
-              <span style={pill}>{detail.weather.temperature_c}°C · {detail.weather.description}</span>
+            {ev.temperature_c != null && (
+              <span style={pill}>{ev.temperature_c}°C{ev.wind_speed != null ? ` · ${ev.wind_speed} km/h wind` : ''}</span>
             )}
           </div>
 
@@ -443,6 +443,9 @@ export default async function MatchDetailPage({ params }: Params) {
         lineups={enrichedLineups}
         homeCoach={ev.home_coach?.name ?? null}
         awayCoach={ev.away_coach?.name ?? null}
+        referee={ev.referee?.name ?? null}
+        temperatureC={ev.temperature_c ?? null}
+        windSpeed={ev.wind_speed ?? null}
         bsdStats={bsdStats}
         venue={venue ?? null}
         matchDate={ev.event_date}

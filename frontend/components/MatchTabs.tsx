@@ -26,6 +26,7 @@ export default function MatchTabs({
   xgHome, xgAway, homeScorers, awayScorers,
   topPlayers, playerRosterImages, lineups, bsdStats, prediction,
   venue, matchDate, roundLabel, homeCoach, awayCoach,
+  referee, temperatureC, windSpeed,
   groupStandings, groupName, isLive,
 }: MatchTabsProps) {
   const [tab, setTab] = useState<Tab>(isLive && lineups ? 'lineups' : 'overview')
@@ -71,7 +72,7 @@ export default function MatchTabs({
     homeYellows, awayYellows, homeReds, awayReds,
     hPassAcc, aPassAcc,
     topPlayers, playerImageMap, bsdStats, prediction,
-    venue, matchDate, roundLabel, isLive,
+    venue, matchDate, roundLabel, referee, temperatureC, windSpeed, isLive,
   }
 
   return (

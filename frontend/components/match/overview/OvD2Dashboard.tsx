@@ -7,7 +7,7 @@ import IncidentTimeline from '@/components/IncidentTimeline'
 import TopPlayersSection from '../shared/TopPlayersSection'
 import MatchFactsSection from '../shared/MatchFactsSection'
 
-export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, incidents, hStats, aStats, hasStats, xgHome, xgAway, homeYellows, awayYellows, hPassAcc, aPassAcc, topPlayers, playerImageMap, bsdStats, prediction, venue, matchDate, roundLabel, isLive }: OvProps) {
+export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, incidents, hStats, aStats, hasStats, xgHome, xgAway, homeYellows, awayYellows, hPassAcc, aPassAcc, topPlayers, playerImageMap, bsdStats, prediction, venue, matchDate, roundLabel, referee, temperatureC, windSpeed, isLive }: OvProps) {
   const bsd = bsdStats?.stats
   const bigCards = [
     { label:'POSSESSION',     h:bsd?.home.ball_possession??0,  a:bsd?.away.ball_possession??0,  pct:true, avail:!!bsd },
@@ -35,6 +35,8 @@ export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, 
     ...(venue?.country ? [['Country', venue.country] as [string,string]] : []),
     ...(matchDate ? [['Kickoff', fmtKickoff(matchDate)] as [string,string]] : []),
     ...(roundLabel ? [['Round', roundLabel] as [string,string]] : []),
+    ...(referee ? [['Referee', referee] as [string,string]] : []),
+    ...(temperatureC != null ? [['Weather', `${temperatureC}°C${windSpeed != null ? ` · ${windSpeed} km/h wind` : ''}`] as [string,string]] : []),
     ['Competition', 'World Cup 2026'],
   ]
 

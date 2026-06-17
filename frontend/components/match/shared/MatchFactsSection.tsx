@@ -1,9 +1,12 @@
 'use client'
 
-export default function MatchFactsSection({ venue, matchDate, roundLabel }: {
+export default function MatchFactsSection({ venue, matchDate, roundLabel, referee, temperatureC, windSpeed }: {
   venue?: { name?: string; city?: string; country?: string; capacity?: number } | null
   matchDate?: string | null
   roundLabel?: string | null
+  referee?: string | null
+  temperatureC?: number | null
+  windSpeed?: number | null
 }) {
   const fmtKickoff = (d: string) => {
     const dt = new Date(d)
@@ -18,6 +21,8 @@ export default function MatchFactsSection({ venue, matchDate, roundLabel }: {
     ...(venue?.country ? [['Country', venue.country] as [string, string]] : []),
     ...(matchDate ? [['Kickoff', fmtKickoff(matchDate)] as [string, string]] : []),
     ...(roundLabel ? [['Round', roundLabel] as [string, string]] : []),
+    ...(referee ? [['Referee', referee] as [string, string]] : []),
+    ...(temperatureC != null ? [['Weather', `${temperatureC}°C${windSpeed != null ? ` · ${windSpeed} km/h wind` : ''}`] as [string, string]] : []),
     ['Competition', 'World Cup 2026'],
   ]
 
