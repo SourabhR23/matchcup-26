@@ -26,8 +26,19 @@ export interface MatchEvent {
   home_xg_live: number | null
   away_xg_live: number | null
   weather_code: number | null
+  weather_description?: string | null
   temperature_c: number | null
   wind_speed: number | null
+  pitch_condition?: number | null
+  is_local_derby?: boolean | null
+  is_neutral_ground?: boolean | null
+  h2h_data?: {
+    total_matches: number; home_wins: number; draws: number; away_wins: number
+    home_goals: number; away_goals: number; avg_total_goals: number
+    home_win_rate: number; away_win_rate: number
+    recent_matches: { home: string; away: string; date: string; score: string }[]
+  } | null
+  highlights?: { kind: string; title: string; url: string; thumbnail: string; published_at?: string }[] | null
   venue: { id: number; name: string; city: string; country: string; capacity: number } | null
   referee: {
     id: number
@@ -187,7 +198,7 @@ export interface MatchDetail extends MatchEvent {
       substitutes: LineupPlayer[]
     }
   }
-  highlights?: { kind: string; title: string; url: string; thumbnail: string }[]
+  highlights?: { kind: string; title: string; url: string; thumbnail: string; published_at?: string }[]
   live_websocket?: boolean
 }
 

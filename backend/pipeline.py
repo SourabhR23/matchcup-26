@@ -125,30 +125,61 @@ def populate_managers():
 
 
 def populate_referees():
-    """Fetch all WC2026 referees from BSD and backfill referee_name in matches."""
-    print('\n  Fetching referees from BSD …')
+    """Fetch WC2026 referees from BSD → upsert referees table → backfill matches.referee_name."""
+    print('\n  Fetching referees from BSD (league_id=27, season_id=188) ...')
     data = get('/api/v2/referees/?league_id=27&season_id=188')
     if not data:
         print('    FAILED: cannot reach referees endpoint'); return 0
     results = data.get('results', []) if isinstance(data, dict) else data
-    print(f'  {len(results)} referee(s) returned')
-    lookup = {}
-    for r in results:
-        rid = ni(r.get('id'))
-        name = nv(r.get('name'))
-        if rid and name:
-            lookup[rid] = name
+    print(f'  {len(results)} referee(s) in bulk response')
+
+    def _ref_row(r):
+        return {
+            'id':                  ni(r.get('id')),
+            'name':                nv(r.get('name')),
+            'country':             nv(r.get('country')),
+            'birthdate':           nv(r.get('birthdate')) or None,
+            'nationality_a3':      nv(r.get('nationality_a3') or r.get('alpha3')),
+            'career_games':        ni(r.get('career_games') or r.get('matches_total') or r.get('total_matches')),
+            'career_yellow_cards': ni(r.get('career_yellow_cards') or r.get('yellow_cards') or r.get('total_yellow_cards')),
+            'career_red_cards':    ni(r.get('career_red_cards') or r.get('red_cards') or r.get('total_red_cards')),
+        }
+
+    rows = [_ref_row(r) for r in results if ni(r.get('id'))]
+    if rows:
+        upsert('referees', rows, 'id', label='(WC2026 referees bulk)')
+
+    # Find referee IDs used in matches but not returned by bulk endpoint
+    existing_ids = {row['id'] for row in rows}
+    match_ids_res = sb.table('matches').select('referee_id').not_.is_('referee_id', 'null').execute()
+    match_ref_ids = {r['referee_id'] for r in (match_ids_res.data or []) if r.get('referee_id')}
+    missing_ids = match_ref_ids - existing_ids
+    if missing_ids:
+        print(f'  {len(missing_ids)} referee ID(s) missing from bulk — fetching individually ...')
+        for rid in sorted(missing_ids):
+            rdata = get(f'/api/v2/referees/{rid}/')
+            if not rdata or not isinstance(rdata, dict):
+                print(f'    SKIP {rid}: not found on BSD'); continue
+            row = _ref_row(rdata)
+            row['id'] = row['id'] or rid
+            if row['name']:
+                upsert('referees', [row], 'id', label=f'({rid})')
+                print(f'    {rid}: {row["name"]}')
+            time.sleep(DELAY)
+
+    # Backfill matches.referee_name from referees table (denorm text fallback)
+    all_refs = sb.table('referees').select('id,name').execute().data or []
+    ref_map = {r['id']: r['name'] for r in all_refs if r.get('name')}
     updated = 0
-    for rid, name in lookup.items():
+    for rid, name in ref_map.items():
         try:
             sb.table('matches').update({'referee_name': name}).eq('referee_id', rid).execute()
-            print(f'    {rid}: {name}')
             updated += 1
         except Exception as e:
-            print(f'    ERR referee {rid}: {e}')
-        time.sleep(0.1)
-    print(f'    Updated referee_name for {updated} referee(s) across all matches')
-    return updated
+            print(f'    ERR matches referee_name {rid}: {e}')
+        time.sleep(0.05)
+    print(f'    Backfilled referee_name in matches for {updated} referee(s)')
+    return len(rows) + len(missing_ids)
 
 
 def populate_venues():
@@ -177,6 +208,196 @@ def populate_venues():
     if rows:
         upsert('venues', rows, 'id', label='(WC2026 venues)')
     return len(rows)
+
+
+def backfill_local():
+    """Read all BSD/completed_v2/event_*/detail.json files and upsert into matches (no API calls)."""
+    event_dirs = sorted(CACHE_DIR.glob('event_*/detail.json'))
+    print(f'\n  backfill_local: {len(event_dirs)} local detail.json files found')
+    rows = []
+    for path in event_dirs:
+        try:
+            detail = json.loads(path.read_text(encoding='utf-8'))
+        except Exception as e:
+            print(f'    SKIP {path}: {e}'); continue
+        eid = ni(detail.get('id'))
+        if not eid:
+            continue
+        home_id = ni(detail.get('home_team_id'))
+        away_id = ni(detail.get('away_team_id'))
+        venue   = detail.get('venue') or {}
+        ref     = detail.get('referee') or {}
+        if isinstance(ref, str): ref = {'name': ref}
+        weather = detail.get('weather') or {}
+        home_coach = detail.get('home_coach') or {}
+        away_coach = detail.get('away_coach') or {}
+        if isinstance(home_coach, str): home_coach = {'name': home_coach}
+        if isinstance(away_coach, str): away_coach = {'name': away_coach}
+        status = (detail.get('status') or '').lower()
+        db_status = 'finished' if status in FINISHED else status
+        rows.append({
+            'id':                  eid,
+            'event_date':          detail.get('event_date'),
+            'status':              db_status,
+            'round_name':          nv(detail.get('round_name')),
+            'round_number':        ni(detail.get('round_number')),
+            'group_name':          nv(detail.get('group_name')),
+            'home_team_id':        home_id,
+            'home_team_name':      nv(detail.get('home_team')),
+            'away_team_id':        away_id,
+            'away_team_name':      nv(detail.get('away_team')),
+            'home_score':          ni(detail.get('home_score')),
+            'away_score':          ni(detail.get('away_score')),
+            'home_score_ht':       ni(detail.get('home_score_ht')),
+            'away_score_ht':       ni(detail.get('away_score_ht')),
+            'venue_id':            ni(venue.get('id') or detail.get('venue_id')),
+            'venue_name':          nv(venue.get('name') or detail.get('venue_name')),
+            'venue_city':          nv(venue.get('city') or detail.get('venue_city')),
+            'referee_id':          ni(ref.get('id') or detail.get('referee_id')),
+            'referee_name':        nv(ref.get('name') or detail.get('referee_name')),
+            'home_coach':          nv(home_coach.get('name')),
+            'away_coach':          nv(away_coach.get('name')),
+            'home_coach_id':       ni(detail.get('home_coach_id')),
+            'away_coach_id':       ni(detail.get('away_coach_id')),
+            'attendance':          ni(detail.get('attendance')),
+            'temperature_c':       nf(weather.get('temperature_c') or detail.get('temperature_c')),
+            'wind_speed':          nf(weather.get('wind_speed') or detail.get('wind_speed')),
+            'weather_code':        ni(weather.get('code')),
+            'weather_description': nv(weather.get('description')),
+            'pitch_condition':     ni(detail.get('pitch_condition')),
+            'is_local_derby':      bool(detail.get('is_local_derby', False)),
+            'is_neutral_ground':   bool(detail.get('is_neutral_ground', False)),
+            'h2h_data':            detail.get('head_to_head') or None,
+            'highlights':          detail.get('highlights') or None,
+        })
+    if not rows:
+        print('  Nothing to upsert.'); return 0
+    # Batch upsert in chunks of 50
+    chunk = 50
+    for i in range(0, len(rows), chunk):
+        batch = rows[i:i+chunk]
+        try:
+            sb.table('matches').upsert(batch, on_conflict='id').execute()
+            print(f'    OK  matches — rows {i+1}–{i+len(batch)}')
+        except Exception as e:
+            print(f'    ERR batch {i}: {e}')
+    return len(rows)
+
+
+def backfill_venue_names():
+    """Copy venue name/city from venues table into matches.venue_name / venue_city."""
+    print('\n  backfill_venue_names …')
+    venues_data = sb.table('venues').select('id,name,city').execute().data or []
+    vid_map = {v['id']: v for v in venues_data}
+    print(f'    {len(vid_map)} venues in reference table')
+    matches = sb.table('matches').select('id,venue_id,venue_name').execute().data or []
+    updated = 0
+    for row in matches:
+        vid = row.get('venue_id')
+        if not vid or row.get('venue_name'):
+            continue
+        v = vid_map.get(vid)
+        if not v:
+            continue
+        sb.table('matches').update({'venue_name': v['name'], 'venue_city': v.get('city')}).eq('id', row['id']).execute()
+        updated += 1
+        time.sleep(0.05)
+    print(f'    Updated venue_name/city for {updated} match(es)')
+    return updated
+
+
+def backfill_coach_names():
+    """Copy coach name from managers table into matches.home_coach / away_coach text columns."""
+    print('\n  backfill_coach_names …')
+    mgr_data = sb.table('managers').select('id,name').execute().data or []
+    mgr_map = {m['id']: m['name'] for m in mgr_data}
+    print(f'    {len(mgr_map)} managers in reference table')
+    # Find coach IDs that are missing from managers and fetch them individually
+    matches = sb.table('matches').select('id,home_coach_id,away_coach_id,home_coach,away_coach').execute().data or []
+    missing_ids = set()
+    for row in matches:
+        for cid_key in ('home_coach_id', 'away_coach_id'):
+            cid = row.get(cid_key)
+            if cid and cid not in mgr_map:
+                missing_ids.add(cid)
+    for cid in sorted(missing_ids):
+        print(f'    fetching missing manager {cid} from BSD …')
+        data = get(f'/api/v2/managers/{cid}/')
+        name = nv((data or {}).get('name'))
+        if name:
+            mgr_map[cid] = name
+            sb.table('managers').upsert([{'id': cid, 'name': name}], on_conflict='id').execute()
+        time.sleep(DELAY)
+    updated = 0
+    for row in matches:
+        updates = {}
+        hcid = row.get('home_coach_id')
+        acid = row.get('away_coach_id')
+        if hcid and hcid in mgr_map and not row.get('home_coach'):
+            updates['home_coach'] = mgr_map[hcid]
+        if acid and acid in mgr_map and not row.get('away_coach'):
+            updates['away_coach'] = mgr_map[acid]
+        if updates:
+            sb.table('matches').update(updates).eq('id', row['id']).execute()
+            updated += 1
+            time.sleep(0.05)
+    print(f'    Updated home_coach/away_coach for {updated} match(es)')
+    return updated
+
+
+def backfill_missing_referees():
+    """Fetch individual referee records from BSD for any match with referee_id but NULL referee_name."""
+    print('\n  backfill_missing_referees …')
+    res = sb.table('matches').select('referee_id').is_('referee_name', 'null').execute().data or []
+    missing = {r['referee_id'] for r in res if r.get('referee_id')}
+    print(f'    {len(missing)} unique referee ID(s) with NULL name')
+    fixed = 0
+    for rid in sorted(missing):
+        data = get(f'/api/v2/referees/{rid}/')
+        name = nv((data or {}).get('name')) if isinstance(data, dict) else None
+        if name:
+            sb.table('matches').update({'referee_name': name}).eq('referee_id', rid).execute()
+            print(f'    {rid}: {name}')
+            fixed += 1
+        else:
+            print(f'    {rid}: not found on BSD')
+        time.sleep(DELAY)
+    print(f'    Fixed referee_name for {fixed} referee(s)')
+    return fixed
+
+
+def verify_coaches():
+    """Cross-check coaches table vs managers table — print mismatches."""
+    print('\n  verify_coaches …')
+    try:
+        coaches_data = sb.table('coaches').select('*').execute().data or []
+    except Exception as e:
+        print(f'    coaches table error: {e}'); return
+    mgr_data = sb.table('managers').select('id,name').execute().data or []
+    mgr_map = {m['id']: m['name'] for m in mgr_data}
+    print(f'    coaches table: {len(coaches_data)} rows')
+    print(f'    managers table: {len(mgr_map)} rows')
+    if not coaches_data:
+        print('    coaches table is empty — safe to ignore'); return
+    mismatches = []
+    missing_from_managers = []
+    for c in coaches_data:
+        cid = c.get('id') or c.get('coach_id')
+        cname = c.get('name') or c.get('coach_name') or ''
+        if cid not in mgr_map:
+            missing_from_managers.append((cid, cname))
+        elif mgr_map[cid] != cname and cname:
+            mismatches.append((cid, cname, mgr_map[cid]))
+    if missing_from_managers:
+        print(f'\n    IDs in coaches but NOT in managers ({len(missing_from_managers)}):')
+        for cid, cname in missing_from_managers:
+            print(f'      id={cid} name={cname}')
+    if mismatches:
+        print(f'\n    Name mismatches ({len(mismatches)}):')
+        for cid, c_name, m_name in mismatches:
+            print(f'      id={cid}  coaches={c_name!r}  managers={m_name!r}')
+    if not missing_from_managers and not mismatches:
+        print('    coaches table is a clean subset of managers — safe to ignore')
 
 
 # ── Supabase upsert helper ────────────────────────────────────────────────────
@@ -263,9 +484,16 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         'away_coach':       nv(away_coach.get('name')),
         'home_coach_id':    home_coach_id,
         'away_coach_id':    away_coach_id,
-        'attendance':       ni(detail.get('attendance')),
-        'temperature_c':    nf(weather.get('temperature_c') or detail.get('temperature_c')),
-        'wind_speed':       nf(weather.get('wind_speed') or detail.get('wind_speed')),
+        'attendance':          ni(detail.get('attendance')),
+        'temperature_c':       nf(weather.get('temperature_c') or detail.get('temperature_c')),
+        'wind_speed':          nf(weather.get('wind_speed') or detail.get('wind_speed')),
+        'weather_code':        ni(weather.get('code')),
+        'weather_description': nv(weather.get('description')),
+        'pitch_condition':     ni(detail.get('pitch_condition')),
+        'is_local_derby':      bool(detail.get('is_local_derby', False)),
+        'is_neutral_ground':   bool(detail.get('is_neutral_ground', False)),
+        'h2h_data':            detail.get('head_to_head') or None,
+        'highlights':          detail.get('highlights') or None,
     }
     def _upsert_match(row):
         try:
@@ -275,8 +503,10 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         except Exception as e:
             es = str(e)
             # PostgREST schema cache hasn't picked up new columns yet — strip them and retry
-            if 'PGRST204' in es or 'home_coach_id' in es or 'away_coach_id' in es:
-                row = {k: v for k, v in row.items() if k not in ('home_coach_id', 'away_coach_id')}
+            _new_cols = ('home_coach_id', 'away_coach_id', 'weather_code', 'weather_description',
+                         'pitch_condition', 'is_local_derby', 'is_neutral_ground', 'h2h_data', 'highlights')
+            if 'PGRST204' in es or any(c in es for c in _new_cols):
+                row = {k: v for k, v in row.items() if k not in _new_cols}
                 try:
                     sb.table('matches').upsert([row], on_conflict='id').execute()
                     print(f'    OK  matches — 1 row(s) (coach_id cols not in cache yet)')
@@ -525,21 +755,32 @@ def main():
     parser.add_argument('--id',       type=int, nargs='+', help='Collect specific event ID(s)')
     parser.add_argument('--all',      action='store_true', help='Re-collect all matches in Supabase')
     parser.add_argument('--force',    action='store_true', help='Re-collect even if already finished in Supabase')
-    parser.add_argument('--populate', action='store_true', help='Fetch all WC2026 managers + venues from BSD → Supabase reference tables')
-    parser.add_argument('--schema',   action='store_true', help='Print SQL to run in Supabase dashboard to add coach ID columns')
+    parser.add_argument('--populate',        action='store_true', help='Fetch all WC2026 managers + venues + referees from BSD → Supabase reference tables')
+    parser.add_argument('--backfill-local',  action='store_true', help='Read all local BSD/completed_v2/event_*/detail.json and upsert to matches (no API calls)')
+    parser.add_argument('--fix-refs',        action='store_true', help='Fetch individual referee records for matches with NULL referee_name')
+    parser.add_argument('--verify-coaches',  action='store_true', help='Cross-check coaches table vs managers table')
+    parser.add_argument('--schema',          action='store_true', help='Print SQL to run in Supabase dashboard')
     args = parser.parse_args()
 
     print(f'Supabase: {SUPABASE_URL}')
     print(f'BSD API:  {BSD_BASE}\n')
 
     if args.schema:
-        print("-- Run this SQL in your Supabase dashboard (SQL Editor):\n")
+        print("-- Run this SQL in your Supabase SQL Editor:\n")
         print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS home_coach_id INTEGER REFERENCES managers(id);")
         print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS away_coach_id INTEGER REFERENCES managers(id);")
+        print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS weather_code INTEGER;")
+        print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS weather_description TEXT;")
+        print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS pitch_condition INTEGER;")
+        print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS is_local_derby BOOLEAN DEFAULT false;")
+        print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS is_neutral_ground BOOLEAN DEFAULT false;")
+        print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS h2h_data JSONB;")
+        print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS highlights JSONB;")
         print()
-        print("-- FK from venue_id to venues (needed for PostgREST join in frontend)")
         print("ALTER TABLE matches ADD CONSTRAINT IF NOT EXISTS fk_matches_venue")
         print("  FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE SET NULL;")
+        print()
+        print("NOTIFY pgrst, 'reload schema';")
         return
 
     if args.populate:
@@ -547,6 +788,21 @@ def main():
         v = populate_venues()
         r = populate_referees()
         print(f'\nPopulate done — {m} manager(s), {v} venue(s), {r} referee(s) updated.')
+        return
+
+    if args.backfill_local:
+        n = backfill_local()
+        bv = backfill_venue_names()
+        bc = backfill_coach_names()
+        print(f'\nBackfill done — {n} match(es) upserted, {bv} venue(s) named, {bc} coach name(s) filled.')
+        return
+
+    if args.fix_refs:
+        backfill_missing_referees()
+        return
+
+    if args.verify_coaches:
+        verify_coaches()
         return
 
     if args.serve:

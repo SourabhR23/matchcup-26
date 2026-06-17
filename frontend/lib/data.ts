@@ -20,7 +20,8 @@ const MATCH_SELECT = `
   *,
   venue_detail:venues!venue_id(id, name, city, country, capacity),
   home_manager:managers!home_coach_id(id, name, short_name, nationality),
-  away_manager:managers!away_coach_id(id, name, short_name, nationality)
+  away_manager:managers!away_coach_id(id, name, short_name, nationality),
+  referee_detail:referees!referee_id(id, name, country, career_games, career_yellow_cards, career_red_cards)
 `.trim()
 
 /* ── Map flat Supabase matches row → MatchEvent ── */
@@ -64,27 +65,38 @@ function rowToEvent(r: any): MatchEvent {
     period:         null,
     current_minute: null,
     venue,
-    referee:        (r.referee_id || r.referee_name) ? { id: r.referee_id ?? 0, name: r.referee_name ?? '', country: '', career_games: 0, career_yellow_cards: 0, career_red_cards: 0 } : null,
+    referee:        (() => {
+      const rd = r.referee_detail
+      if (rd) return { id: rd.id, name: rd.name ?? '', country: rd.country ?? '', career_games: rd.career_games ?? 0, career_yellow_cards: rd.career_yellow_cards ?? 0, career_red_cards: rd.career_red_cards ?? 0 }
+      if (r.referee_id || r.referee_name) return { id: r.referee_id ?? 0, name: r.referee_name ?? '', country: '', career_games: 0, career_yellow_cards: 0, career_red_cards: 0 }
+      return null
+    })(),
     home_coach,
     away_coach,
     actual_home_xg: r.home_xg   ?? null,
     actual_away_xg: r.away_xg   ?? null,
     home_xg_live:   null,
     away_xg_live:   null,
-    temperature_c:  r.temperature_c ?? null,
-    wind_speed:     r.wind_speed    ?? null,
-    attendance:     r.attendance    ?? null,
-    odds_home:      null,
-    odds_draw:      null,
-    odds_away:      null,
-    odds_over_25:   null,
-    odds_under_25:  null,
-    odds_btts_yes:  null,
-    odds_btts_no:   null,
-    weather_code:   null,
-    jerseys:        null,
-    live_stats:     null,
-    funfacts:       null,
+    temperature_c:       r.temperature_c       ?? null,
+    wind_speed:          r.wind_speed           ?? null,
+    attendance:          r.attendance           ?? null,
+    odds_home:           null,
+    odds_draw:           null,
+    odds_away:           null,
+    odds_over_25:        null,
+    odds_under_25:       null,
+    odds_btts_yes:       null,
+    odds_btts_no:        null,
+    weather_code:        r.weather_code         ?? null,
+    weather_description: r.weather_description  ?? null,
+    pitch_condition:     r.pitch_condition      ?? null,
+    is_local_derby:      r.is_local_derby       ?? null,
+    is_neutral_ground:   r.is_neutral_ground    ?? null,
+    h2h_data:            r.h2h_data             ?? null,
+    highlights:          r.highlights           ?? null,
+    jerseys:             null,
+    live_stats:          null,
+    funfacts:            null,
   }
 }
 
