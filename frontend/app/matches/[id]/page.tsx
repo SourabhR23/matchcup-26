@@ -100,10 +100,8 @@ export default async function MatchDetailPage({ params }: Params) {
 
   for (const p of rawStats) {
     // Prefer team_id match; fall back to team_name when team_id is missing/zero
-    const pid = p.team_id as number | undefined
-    const isHome = (homeId > 0 && pid && pid > 0)
-      ? pid === homeId
-      : ((p.team_name as string) ?? '').toLowerCase() === homeName
+    const pid = p.team_id
+    const isHome = homeId > 0 ? pid === homeId : false
     const side = isHome ? hStats : aStats
     side.shots         += Number(p.total_shots)              || 0
     side.onTarget      += Number(p.shots_on_target)          || 0
@@ -476,6 +474,8 @@ export default async function MatchDetailPage({ params }: Params) {
         } : null}
         groupStandings={groupStandings}
         groupName={groupName}
+        playerMatchStats={rawStats}
+        homeTeamId={homeId}
       />
 
       {/* ══ BOTTOM BAR ════════════════════════════════════════════ */}

@@ -9,6 +9,7 @@ import type {
   Incident,
   GroupTeamStat,
   BsdMatchStats,
+  PlayerMatchStat,
 } from './types'
 
 const BSD_BASE  = 'https://sports.bzzoiro.com'
@@ -204,13 +205,16 @@ export async function getMatchSummary(eventId: number): Promise<MatchSummary | n
     .filter(p => p.rating)
     .sort((a, b) => Number(b.rating) - Number(a.rating))
     .slice(0, 10)
-    .map(p => ({
-      name:   String(p.player_name ?? ''),
-      team:   String(p.team_name   ?? ''),
-      pos:    String(p.position    ?? '') || null,
-      rating: Number(p.rating),
-      goals:  Number(p.goals ?? 0),
-    }))
+    .map(p => {
+      const row = p as unknown as Record<string, unknown>
+      return {
+        name:   String(row.player_name ?? ''),
+        team:   String(row.team_name   ?? ''),
+        pos:    String(row.position    ?? '') || null,
+        rating: Number(p.rating),
+        goals:  Number(p.goals ?? 0),
+      }
+    })
   return {
     event_id:     eventId,
     extracted_at: new Date().toISOString(),
@@ -237,13 +241,13 @@ export async function getMatchSummary(eventId: number): Promise<MatchSummary | n
 }
 
 /* ── Player stats for a match from Supabase ── */
-export async function getPlayerStats(eventId: number): Promise<Record<string, unknown>[]> {
+export async function getPlayerStats(eventId: number): Promise<PlayerMatchStat[]> {
   const { data, error } = await supabaseServer
     .from('player_match_stats')
     .select('*')
     .eq('event_id', eventId)
   if (error || !data) return []
-  return data as Record<string, unknown>[]
+  return data as PlayerMatchStat[]
 }
 
 /* ── Match lineups — fetched live from API ── */

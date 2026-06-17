@@ -1,4 +1,5 @@
-import type { Incident, BsdMatchStats, GroupTeamStat } from '@/lib/types'
+import type { Incident, BsdMatchStats, GroupTeamStat, PlayerMatchStat } from '@/lib/types'
+export type { PlayerMatchStat }
 
 export interface ExtStats {
   shots: number; onTarget: number; passes: number; accuratePasses: number
@@ -61,6 +62,8 @@ export interface MatchTabsProps {
   referee?: string | null
   temperatureC?: number | null
   windSpeed?: number | null
+  playerMatchStats?: PlayerMatchStat[]
+  homeTeamId?: number
   groupStandings?: GroupTeamStat[] | null
   groupName?: string | null
   isLive?: boolean

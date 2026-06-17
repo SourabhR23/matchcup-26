@@ -76,6 +76,51 @@ export interface MatchEvent {
   odds_btts_no?: number | null
 }
 
+/* ── Per-player match statistics (player_match_stats table) ── */
+export interface PlayerMatchStat {
+  id: number
+  player_id: number
+  event_id: number
+  team_id: number
+  minutes_played: number
+  rating: number | null
+  touches: number
+  goals: number
+  goal_assist: number
+  expected_goals: number | null
+  expected_assists: number | null
+  total_shots: number
+  shots_on_target: number
+  key_pass: number
+  total_pass: number
+  accurate_pass: number
+  total_long_balls: number
+  accurate_long_balls: number
+  total_cross: number
+  accurate_cross: number
+  total_contest: number
+  won_contest: number
+  duel_won: number
+  duel_lost: number
+  aerial_won: number
+  aerial_lost: number
+  total_tackle: number
+  won_tackle: number
+  total_clearance: number
+  interception: number
+  ball_recovery: number
+  blocked_scoring_attempt: number
+  dispossessed: number
+  possession_lost: number
+  was_fouled: number
+  fouls: number
+  yellow_card: number
+  red_card: number
+  saves: number
+  goals_conceded: number
+  punches: number
+}
+
 /* ── Team from real_teams.json ── */
 export interface Team {
   id: number

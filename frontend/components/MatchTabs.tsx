@@ -11,6 +11,7 @@ import BsdVizPanel from './match/stats/BsdVizPanel'
 import StandingsPanel from './match/standings/StandingsPanel'
 import OverviewTab from './match/overview/OverviewTab'
 import PredictionTab from './match/prediction/PredictionTab'
+import PlayerStatsTab from './match/playerstats/PlayerStatsTab'
 import { StatSectionA, StatRowA } from './match/stats/helpers'
 import type { OvProps } from './match/types'
 
@@ -18,7 +19,7 @@ export type { ExtStats, MatchTabsProps } from './match/types'
 
 import type { MatchTabsProps } from './match/types'
 
-type Tab = 'overview' | 'lineups' | 'stats' | 'analysis' | 'standings' | 'prediction'
+type Tab = 'overview' | 'lineups' | 'stats' | 'analysis' | 'standings' | 'prediction' | 'playerstats'
 
 export default function MatchTabs({
   homeTeam, awayTeam, homeAbbr, awayAbbr,
@@ -27,6 +28,7 @@ export default function MatchTabs({
   topPlayers, playerRosterImages, lineups, bsdStats, prediction,
   venue, matchDate, roundLabel, homeCoach, awayCoach,
   referee, temperatureC, windSpeed,
+  playerMatchStats, homeTeamId,
   groupStandings, groupName, isLive,
 }: MatchTabsProps) {
   const [tab, setTab] = useState<Tab>(isLive && lineups ? 'lineups' : 'overview')
@@ -87,6 +89,7 @@ export default function MatchTabs({
           {bsdStats && tabBtn('analysis', 'Analysis')}
           {groupStandings && groupStandings.length > 0 && tabBtn('standings', 'Standings')}
           {prediction && tabBtn('prediction', 'Prediction')}
+          {playerMatchStats && playerMatchStats.length > 0 && tabBtn('playerstats', 'Players')}
         </div>
       </div>
 
@@ -215,6 +218,17 @@ export default function MatchTabs({
           awayTeam={awayTeam}
           homeAbbr={homeAbbr}
           awayAbbr={awayAbbr}
+        />
+      )}
+
+      {/* ══ PLAYER STATS ═══════════════════════════════════════════ */}
+      {tab === 'playerstats' && playerMatchStats && playerMatchStats.length > 0 && (
+        <PlayerStatsTab
+          stats={playerMatchStats}
+          lineups={lineups ?? null}
+          homeTeam={homeTeam}
+          awayTeam={awayTeam}
+          homeTeamId={homeTeamId ?? 0}
         />
       )}
 
