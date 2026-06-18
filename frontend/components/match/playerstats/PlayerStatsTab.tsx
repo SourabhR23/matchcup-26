@@ -12,9 +12,9 @@ type ColDef = {
   display?: (p: PlayerMatchStat) => string
 }
 
-const TABS: { id: SubTab; label: string; cols: ColDef[] }[] = [
+const TABS: { id: SubTab; label: string; defaultSort: string; cols: ColDef[] }[] = [
   {
-    id: 'top', label: 'Top Stats',
+    id: 'top', label: 'Top Stats', defaultSort: 'rating',
     cols: [
       { key: 'rating',   label: 'Rating',  getValue: p => p.rating ?? 0,           display: p => p.rating != null ? p.rating.toFixed(1) : '—' },
       { key: 'minutes',  label: 'Min',     getValue: p => p.minutes_played },
@@ -26,7 +26,7 @@ const TABS: { id: SubTab; label: string; cols: ColDef[] }[] = [
     ],
   },
   {
-    id: 'shots', label: 'Shots',
+    id: 'shots', label: 'Shots', defaultSort: 'total_shots',
     cols: [
       { key: 'rating',      label: 'Rating',    getValue: p => p.rating ?? 0,         display: p => p.rating != null ? p.rating.toFixed(1) : '—' },
       { key: 'total_shots', label: 'Shots',     getValue: p => p.total_shots },
@@ -36,7 +36,7 @@ const TABS: { id: SubTab; label: string; cols: ColDef[] }[] = [
     ],
   },
   {
-    id: 'attack', label: 'Attack',
+    id: 'attack', label: 'Attack', defaultSort: 'goals',
     cols: [
       { key: 'rating',   label: 'Rating',   getValue: p => p.rating ?? 0,           display: p => p.rating != null ? p.rating.toFixed(1) : '—' },
       { key: 'goals',    label: 'Goals',    getValue: p => p.goals },
@@ -48,7 +48,7 @@ const TABS: { id: SubTab; label: string; cols: ColDef[] }[] = [
     ],
   },
   {
-    id: 'passes', label: 'Passes',
+    id: 'passes', label: 'Passes', defaultSort: 'passes',
     cols: [
       { key: 'rating',     label: 'Rating',     getValue: p => p.rating ?? 0, display: p => p.rating != null ? p.rating.toFixed(1) : '—' },
       { key: 'passes',     label: 'Passes',     getValue: p => p.total_pass },
@@ -58,7 +58,7 @@ const TABS: { id: SubTab; label: string; cols: ColDef[] }[] = [
     ],
   },
   {
-    id: 'defense', label: 'Defense',
+    id: 'defense', label: 'Defense', defaultSort: 'tackles',
     cols: [
       { key: 'rating',        label: 'Rating',        getValue: p => p.rating ?? 0, display: p => p.rating != null ? p.rating.toFixed(1) : '—' },
       { key: 'tackles',       label: 'Tackles',       getValue: p => p.won_tackle,              display: p => p.total_tackle > 0 ? `${p.won_tackle}/${p.total_tackle}` : '0' },
@@ -69,7 +69,7 @@ const TABS: { id: SubTab; label: string; cols: ColDef[] }[] = [
     ],
   },
   {
-    id: 'duels', label: 'Duels',
+    id: 'duels', label: 'Duels', defaultSort: 'ground_duels',
     cols: [
       { key: 'rating',       label: 'Rating',       getValue: p => p.rating ?? 0,  display: p => p.rating != null ? p.rating.toFixed(1) : '—' },
       { key: 'ground_duels', label: 'Ground Duels', getValue: p => p.duel_won,     display: p => `${p.duel_won}/${p.duel_won + p.duel_lost}` },
@@ -79,7 +79,7 @@ const TABS: { id: SubTab; label: string; cols: ColDef[] }[] = [
     ],
   },
   {
-    id: 'goalkeeping', label: 'Goalkeeping',
+    id: 'goalkeeping', label: 'Goalkeeping', defaultSort: 'saves',
     cols: [
       { key: 'rating',   label: 'Rating',   getValue: p => p.rating ?? 0, display: p => p.rating != null ? p.rating.toFixed(1) : '—' },
       { key: 'saves',    label: 'Saves',    getValue: p => p.saves },
@@ -92,6 +92,11 @@ const TABS: { id: SubTab; label: string; cols: ColDef[] }[] = [
 const ratingColor = (r: number) =>
   r >= 8.0 ? '#16a34a' : r >= 7.5 ? '#2563eb' : r >= 7.0 ? '#6b7280' : '#4b5563'
 
+const isGK = (p: PlayerMatchStat) => {
+  const pos = (p.player?.position ?? '').toUpperCase()
+  return pos === 'G' || pos === 'GK' || pos === 'GOALKEEPER' || p.saves > 0 || p.goals_conceded > 0
+}
+
 interface Props {
   stats: PlayerMatchStat[]
   homeTeam: string
@@ -102,18 +107,31 @@ interface Props {
 export default function PlayerStatsTab({ stats, homeTeam, awayTeam, homeTeamId }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('top')
   const [sortKey, setSortKey] = useState<string>('rating')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [teamFilter, setTeamFilter] = useState<'all' | 'home' | 'away'>('all')
 
   const tabDef = TABS.find(t => t.id === subTab)!
 
+  const handleColClick = (key: string) => {
+    if (key === sortKey) {
+      setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    } else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
+
   const rows = useMemo(() => {
-    let filtered = [...stats]
+    let filtered = stats.filter(p => p.rating != null)
     if (teamFilter === 'home') filtered = filtered.filter(p => p.team_id === homeTeamId)
     if (teamFilter === 'away') filtered = filtered.filter(p => p.team_id !== homeTeamId)
-    if (subTab === 'goalkeeping') filtered = filtered.filter(p => p.saves > 0 || p.goals_conceded > 0 || p.punches > 0)
+    if (subTab === 'goalkeeping') filtered = filtered.filter(isGK)
     const col = tabDef.cols.find(c => c.key === sortKey) ?? tabDef.cols[0]
-    return filtered.sort((a, b) => col.getValue(b) - col.getValue(a))
-  }, [stats, teamFilter, subTab, sortKey, homeTeamId, tabDef])
+    return [...filtered].sort((a, b) => {
+      const diff = col.getValue(b) - col.getValue(a)
+      return sortDir === 'desc' ? diff : -diff
+    })
+  }, [stats, teamFilter, subTab, sortKey, sortDir, homeTeamId, tabDef])
 
   if (!stats.length) return (
     <div style={{ padding: 48, textAlign: 'center', fontSize: 12, color: '#666', background: '#111' }}>
@@ -132,7 +150,7 @@ export default function PlayerStatsTab({ stats, homeTeam, awayTeam, homeTeamId }
         <div style={{ display: 'flex', flexShrink: 0 }}>
           {TABS.map(t => (
             <button key={t.id}
-              onClick={() => { setSubTab(t.id); setSortKey(t.cols[0].key) }}
+              onClick={() => { setSubTab(t.id); setSortKey(t.defaultSort); setSortDir('desc') }}
               style={{
                 padding: '10px 14px', fontSize: 9, letterSpacing: 2, fontWeight: 700,
                 background: 'none', border: 'none', cursor: 'pointer', textTransform: 'uppercase',
@@ -169,23 +187,28 @@ export default function PlayerStatsTab({ stats, homeTeam, awayTeam, homeTeamId }
               <th style={{
                 textAlign: 'left', padding: '8px 12px', fontSize: 9, letterSpacing: 2,
                 color: '#333', fontWeight: 700, position: 'sticky', left: 0,
-                background: '#0d0d0d', minWidth: 165, zIndex: 1,
+                background: '#0d0d0d', minWidth: 180, zIndex: 1,
               }}>PLAYER</th>
-              {tabDef.cols.map(col => (
-                <th key={col.key} onClick={() => setSortKey(col.key)}
-                  style={{
-                    textAlign: 'center', padding: '8px 10px', fontSize: 9, letterSpacing: 1.5,
-                    color: sortKey === col.key ? 'var(--color-accent)' : '#333',
-                    fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 60,
-                  }}>
-                  {col.label}{sortKey === col.key ? ' ▼' : ''}
-                </th>
-              ))}
+              {tabDef.cols.map(col => {
+                const isActive = sortKey === col.key
+                return (
+                  <th key={col.key} onClick={() => handleColClick(col.key)}
+                    style={{
+                      textAlign: 'center', padding: '8px 10px', fontSize: 9, letterSpacing: 1.5,
+                      color: isActive ? 'var(--color-accent)' : '#333',
+                      fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 60,
+                      userSelect: 'none',
+                    }}>
+                    {col.label}{isActive ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
             {rows.map((p, i) => {
               const isHome = p.team_id === homeTeamId
+              const teamAbbr = isHome ? homeAbbr : awayAbbr
               const name = p.player?.name ?? p.player?.short_name ?? `#${p.player_id}`
               const pos  = p.player?.position ?? ''
               const img  = p.player?.image_url ?? undefined
@@ -209,10 +232,16 @@ export default function PlayerStatsTab({ stats, homeTeam, awayTeam, homeTeamId }
                         }
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#e8e4dc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 105 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#e8e4dc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
                           {name}
                         </div>
-                        {pos && <div style={{ fontSize: 9, color: '#444', letterSpacing: 1, marginTop: 1 }}>{pos.toUpperCase()}</div>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                          {pos && <span style={{ fontSize: 9, color: '#444', letterSpacing: 1 }}>{pos.toUpperCase()}</span>}
+                          {pos && <span style={{ fontSize: 9, color: '#2a2a2a' }}>·</span>}
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: isHome ? 'var(--color-accent)' : '#555' }}>
+                            {teamAbbr}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </td>
