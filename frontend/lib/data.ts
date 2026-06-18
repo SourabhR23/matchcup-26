@@ -101,14 +101,20 @@ function rowToEvent(r: any): MatchEvent {
   }
 }
 
-/* ── All 104 events ── */
+/* ── All events ── */
 export async function getEvents(): Promise<MatchEvent[]> {
   const { data, error } = await supabaseServer
     .from('matches')
     .select(MATCH_SELECT)
     .order('event_date', { ascending: true })
-  if (error || !data) return []
-  return data.map(rowToEvent)
+  if (!error && data && data.length > 0) return data.map(rowToEvent)
+  // FK join may fail if home_coach_id / away_coach_id lack FK constraints — fall back to plain select
+  const { data: plain, error: plainErr } = await supabaseServer
+    .from('matches')
+    .select('*')
+    .order('event_date', { ascending: true })
+  if (plainErr || !plain) return []
+  return plain.map(rowToEvent)
 }
 
 /* ── Real teams (48 nations) ── */
@@ -179,8 +185,18 @@ export async function getMatchDetail(eventId: number): Promise<MatchDetail | nul
     .eq('id', eventId)
     .single()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const row = data as any
-  if (error || !row || row.status !== 'finished') return null
+  let row = data as any
+  if (error || !row) {
+    // FK join may fail — fall back to plain select
+    const { data: plain, error: plainErr } = await supabaseServer
+      .from('matches')
+      .select('*')
+      .eq('id', eventId)
+      .single()
+    if (plainErr || !plain) return null
+    row = plain
+  }
+  if (row.status !== 'finished') return null
   return rowToEvent(row) as MatchDetail
 }
 
