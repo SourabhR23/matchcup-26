@@ -481,28 +481,16 @@ export async function getMiniLeaderboards(limit = 3): Promise<{
   topAssists: MiniPlayerStat[]
 }> {
   const empty = { topRated: [], topScorers: [], topAssists: [] }
-  const [{ data: statRows }, { data: matchRows }] = await Promise.all([
-    supabaseServer
-      .from('player_match_stats')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .select('player_id, team_id, goals, goal_assist, rating, player:players!player_id(short_name, image_url)') as any,
-    supabaseServer.from('matches').select('home_team_id, home_team_name, away_team_id, away_team_name'),
-  ])
+  const { data: statRows } = await supabaseServer
+    .from('player_match_stats')
+    .select('player_id, player_name, team_name, goals, goal_assist, rating')
   if (!statRows) return empty
 
-  const teamMap: Record<number, string> = {}
-  for (const m of matchRows ?? []) {
-    if (m.home_team_id) teamMap[m.home_team_id] = m.home_team_name ?? ''
-    if (m.away_team_id) teamMap[m.away_team_id] = m.away_team_name ?? ''
-  }
-
-  const agg: Record<number, { player_id: number; short_name: string; image_url: string | null; team_id: number; goals: number; assists: number; ratings: number[] }> = {}
+  const agg: Record<number, { player_id: number; short_name: string; image_url: string | null; team_name: string; goals: number; assists: number; ratings: number[] }> = {}
   for (const row of statRows) {
     const pid = row.player_id
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const p = row.player as any
-    if (!pid || !p) continue
-    if (!agg[pid]) agg[pid] = { player_id: pid, short_name: p.short_name ?? '', image_url: p.image_url ?? null, team_id: row.team_id, goals: 0, assists: 0, ratings: [] }
+    if (!pid || !row.player_name) continue
+    if (!agg[pid]) agg[pid] = { player_id: pid, short_name: row.player_name, image_url: null, team_name: row.team_name ?? '', goals: 0, assists: 0, ratings: [] }
     agg[pid].goals   += row.goals       ?? 0
     agg[pid].assists += row.goal_assist ?? 0
     if (row.rating != null) agg[pid].ratings.push(Number(row.rating))
@@ -511,14 +499,14 @@ export async function getMiniLeaderboards(limit = 3): Promise<{
   const all = Object.values(agg)
   const toStat = (arr: typeof all, val: (p: typeof all[0]) => number): MiniPlayerStat[] =>
     arr
-      .map(p => ({ player_id: p.player_id, short_name: p.short_name, image_url: p.image_url, team_name: teamMap[p.team_id] ?? '', value: val(p) }))
+      .map(p => ({ player_id: p.player_id, short_name: p.short_name, image_url: p.image_url, team_name: p.team_name, value: val(p) }))
       .filter(p => p.value > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, limit)
 
   const topRated: MiniPlayerStat[] = all
     .filter(p => p.ratings.length > 0)
-    .map(p => ({ player_id: p.player_id, short_name: p.short_name, image_url: p.image_url, team_name: teamMap[p.team_id] ?? '', value: Math.round((p.ratings.reduce((s, r) => s + r, 0) / p.ratings.length) * 100) / 100 }))
+    .map(p => ({ player_id: p.player_id, short_name: p.short_name, image_url: p.image_url, team_name: p.team_name, value: Math.round((p.ratings.reduce((s, r) => s + r, 0) / p.ratings.length) * 100) / 100 }))
     .sort((a, b) => b.value - a.value)
     .slice(0, limit)
 
