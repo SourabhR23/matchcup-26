@@ -513,6 +513,15 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
     if isinstance(home_coach, str): home_coach = {'name': home_coach}
     if isinstance(away_coach, str): away_coach = {'name': away_coach}
 
+    # ── Read existing row for merge (preserve non-null values BSD strips post-match) ──
+    existing = {}
+    try:
+        res = sb.table('matches').select('*').eq('id', event_id).execute()
+        if res.data:
+            existing = res.data[0]
+    except Exception:
+        pass
+
     # ── 1. matches ──
     db_status = 'finished' if status in FINISHED else status
 
@@ -557,6 +566,17 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         'h2h_data':            detail.get('head_to_head') or None,
         'highlights':          detail.get('highlights') or None,
     }
+
+    # ── Layer 1: merge — BSD strips these post-match, keep existing non-null values ──
+    PRESERVE_IF_SET = (
+        'venue_name', 'venue_city', 'home_coach', 'away_coach', 'referee_name',
+        'round_name', 'group_name', 'home_team_name', 'away_team_name',
+        'attendance', 'h2h_data', 'highlights',
+    )
+    for field in PRESERVE_IF_SET:
+        if match_row.get(field) is None and existing.get(field) is not None:
+            match_row[field] = existing[field]
+
     def _upsert_match(row):
         try:
             sb.table('matches').upsert([row], on_conflict='id').execute()
@@ -589,6 +609,32 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
 
     _upsert_match(dict(match_row))
     time.sleep(DELAY)
+
+    # ── Layer 2: reference table fallback — fill any still-null text cols from Supabase refs ──
+    ref_updates = {}
+    if not match_row.get('venue_name') and match_row.get('venue_id'):
+        v = sb.table('venues').select('name,city').eq('id', match_row['venue_id']).execute()
+        if v.data:
+            ref_updates['venue_name'] = v.data[0].get('name')
+            ref_updates['venue_city'] = v.data[0].get('city')
+    if not match_row.get('referee_name') and match_row.get('referee_id'):
+        r = sb.table('referees').select('name').eq('id', match_row['referee_id']).execute()
+        if r.data:
+            ref_updates['referee_name'] = r.data[0].get('name')
+    if not match_row.get('home_coach') and match_row.get('home_coach_id'):
+        m = sb.table('managers').select('name').eq('id', match_row['home_coach_id']).execute()
+        if m.data:
+            ref_updates['home_coach'] = m.data[0].get('name')
+    if not match_row.get('away_coach') and match_row.get('away_coach_id'):
+        m = sb.table('managers').select('name').eq('id', match_row['away_coach_id']).execute()
+        if m.data:
+            ref_updates['away_coach'] = m.data[0].get('name')
+    if ref_updates:
+        try:
+            sb.table('matches').update(ref_updates).eq('id', event_id).execute()
+            print(f'    filled from ref tables: {list(ref_updates.keys())}')
+        except Exception as e:
+            print(f'    ERR ref table fill — {e}')
 
     # ── 2. player_match_stats ──
     print(f'    fetching player stats …')
