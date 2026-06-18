@@ -3,6 +3,8 @@ import {
   getUpcomingMatches,
   getGroupStandings,
   getTopScorers,
+  getTournamentFacts,
+  getMiniLeaderboards,
   TOTAL_NATIONS,
   TOTAL_GROUPS,
   TOTAL_MATCHES,
@@ -14,6 +16,8 @@ import UpcomingRow from '@/components/UpcomingRow'
 import HomeStandingsWidget from '@/components/HomeStandingsWidget'
 import TopScorersWidget from '@/components/TopScorersWidget'
 import TournamentTimeline from '@/components/TournamentTimeline'
+import TournamentFacts from '@/components/TournamentFacts'
+import MiniLeaderboards from '@/components/MiniLeaderboards'
 import fadeStyles from '@/components/ScrollFade.module.css'
 import type { GroupTeamStat } from '@/lib/types'
 
@@ -68,11 +72,15 @@ function BigStatCard({ value, label, accent }: { value: string | number; label: 
 }
 
 export default async function OverviewPage() {
-  const recentResults = await getRecentResults(2)
-  const upcomingMatches = await getUpcomingMatches(8)
-  const venueCount = await getVenueCount()
-  const topScorers = await getTopScorers(10)
-  const allStandings = await getGroupStandings()
+  const [recentResults, upcomingMatches, venueCount, topScorers, allStandings, facts, leaderboards] = await Promise.all([
+    getRecentResults(2),
+    getUpcomingMatches(8),
+    getVenueCount(),
+    getTopScorers(10),
+    getGroupStandings(),
+    getTournamentFacts(),
+    getMiniLeaderboards(3),
+  ])
   const sortedGroups: [string, GroupTeamStat[]][] = Object.entries(allStandings).sort(([a], [b]) => a.localeCompare(b))
 
   return (
@@ -118,14 +126,28 @@ export default async function OverviewPage() {
         </section>
       )}
 
-      {/* ══ 5. TOP SCORERS ══ */}
+      {/* ══ 5. TOURNAMENT FACTS + MINI LEADERBOARDS ══ */}
+      {facts.goals > 0 && (
+        <section className="mb-4">
+          <TournamentFacts facts={facts} />
+        </section>
+      )}
+      <section className="mb-8">
+        <MiniLeaderboards
+          topRated={leaderboards.topRated}
+          topScorers={leaderboards.topScorers}
+          topAssists={leaderboards.topAssists}
+        />
+      </section>
+
+      {/* ══ 6. TOP SCORERS (from BSD API — shows when endpoint opens) ══ */}
       {topScorers.length > 0 && (
         <section className="mb-8">
           <TopScorersWidget scorers={topScorers} />
         </section>
       )}
 
-      {/* ══ 6. STANDINGS ══ */}
+      {/* ══ 7. STANDINGS ══ */}
       {sortedGroups.length > 0 && (
         <section className="mb-8">
           <HomeStandingsWidget groups={sortedGroups} />

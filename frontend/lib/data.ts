@@ -448,6 +448,83 @@ export async function getTopScorers(limit = 10): Promise<TopScorer[]> {
   return data as TopScorer[]
 }
 
+/* ── Tournament facts: total goals, yellow cards, red cards ── */
+export interface TournamentFacts {
+  goals: number
+  yellow_cards: number
+  red_cards: number
+}
+
+export async function getTournamentFacts(): Promise<TournamentFacts> {
+  const [{ data: matchData }, { data: statData }] = await Promise.all([
+    supabaseServer.from('matches').select('home_score, away_score').eq('status', 'finished'),
+    supabaseServer.from('player_match_stats').select('yellow_card, red_card'),
+  ])
+  const goals = (matchData ?? []).reduce((s, m) => s + (m.home_score ?? 0) + (m.away_score ?? 0), 0)
+  const yellow_cards = (statData ?? []).reduce((s, p) => s + (p.yellow_card ?? 0), 0)
+  const red_cards = (statData ?? []).reduce((s, p) => s + (p.red_card ?? 0), 0)
+  return { goals, yellow_cards, red_cards }
+}
+
+/* ── Mini leaderboards: top rated, top scorers, top assists (derived from player_match_stats) ── */
+export interface MiniPlayerStat {
+  player_id: number
+  short_name: string
+  image_url: string | null
+  team_name: string
+  value: number
+}
+
+export async function getMiniLeaderboards(limit = 3): Promise<{
+  topRated: MiniPlayerStat[]
+  topScorers: MiniPlayerStat[]
+  topAssists: MiniPlayerStat[]
+}> {
+  const empty = { topRated: [], topScorers: [], topAssists: [] }
+  const [{ data: statRows }, { data: matchRows }] = await Promise.all([
+    supabaseServer
+      .from('player_match_stats')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .select('player_id, team_id, goals, goal_assist, rating, player:players!player_id(short_name, image_url)') as any,
+    supabaseServer.from('matches').select('home_team_id, home_team_name, away_team_id, away_team_name'),
+  ])
+  if (!statRows) return empty
+
+  const teamMap: Record<number, string> = {}
+  for (const m of matchRows ?? []) {
+    if (m.home_team_id) teamMap[m.home_team_id] = m.home_team_name ?? ''
+    if (m.away_team_id) teamMap[m.away_team_id] = m.away_team_name ?? ''
+  }
+
+  const agg: Record<number, { player_id: number; short_name: string; image_url: string | null; team_id: number; goals: number; assists: number; ratings: number[] }> = {}
+  for (const row of statRows) {
+    const pid = row.player_id
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = row.player as any
+    if (!pid || !p) continue
+    if (!agg[pid]) agg[pid] = { player_id: pid, short_name: p.short_name ?? '', image_url: p.image_url ?? null, team_id: row.team_id, goals: 0, assists: 0, ratings: [] }
+    agg[pid].goals   += row.goals       ?? 0
+    agg[pid].assists += row.goal_assist ?? 0
+    if (row.rating != null) agg[pid].ratings.push(Number(row.rating))
+  }
+
+  const all = Object.values(agg)
+  const toStat = (arr: typeof all, val: (p: typeof all[0]) => number): MiniPlayerStat[] =>
+    arr
+      .map(p => ({ player_id: p.player_id, short_name: p.short_name, image_url: p.image_url, team_name: teamMap[p.team_id] ?? '', value: val(p) }))
+      .filter(p => p.value > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, limit)
+
+  const topRated: MiniPlayerStat[] = all
+    .filter(p => p.ratings.length > 0)
+    .map(p => ({ player_id: p.player_id, short_name: p.short_name, image_url: p.image_url, team_name: teamMap[p.team_id] ?? '', value: Math.round((p.ratings.reduce((s, r) => s + r, 0) / p.ratings.length) * 100) / 100 }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, limit)
+
+  return { topRated, topScorers: toStat(all, p => p.goals), topAssists: toStat(all, p => p.assists) }
+}
+
 /* ── Live matches ── */
 export async function getLiveMatches(): Promise<MatchEvent[]> {
   const { data, error } = await supabaseServer
