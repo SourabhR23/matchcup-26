@@ -670,3 +670,27 @@ export async function getTeamPlayerStats(eventIds: number[]): Promise<Record<str
 export const TOTAL_NATIONS = 48
 export const TOTAL_GROUPS  = 12
 export const TOTAL_MATCHES = 104
+
+/* ── Knockout matches (non-group-stage rounds) ── */
+export async function getKnockoutMatches(): Promise<MatchEvent[]> {
+  const { data, error } = await supabaseServer
+    .from('matches')
+    .select('*')
+    .or('group_name.is.null,group_name.eq.')
+    .order('event_date', { ascending: true })
+  if (error || !data) return []
+  return data.map(rowToEvent)
+}
+
+/* ── First knockout match date (null if no knockout matches yet) ── */
+export async function getKnockoutStartDate(): Promise<string | null> {
+  const { data, error } = await supabaseServer
+    .from('matches')
+    .select('event_date')
+    .or('group_name.is.null,group_name.eq.')
+    .order('event_date', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error || !data) return null
+  return data.event_date ?? null
+}
