@@ -327,8 +327,40 @@ export async function getCompletedEventIds(): Promise<number[]> {
   return data.map((r) => r.id)
 }
 
-/* ── Derive group standings from Supabase events ── */
+/* ── Group standings: try tournament_standings table (API), fall back to derived ── */
 export async function getGroupStandings(): Promise<Record<string, GroupTeamStat[]>> {
+  // Layer 1: read from tournament_standings table (populated by pipeline --fetch-stats)
+  try {
+    const { data, error } = await supabaseServer
+      .from('tournament_standings')
+      .select('*')
+      .order('position', { ascending: true })
+    if (!error && data && data.length > 0) {
+      const groups: Record<string, GroupTeamStat[]> = {}
+      for (const row of data) {
+        if (!row.group_name) continue
+        if (!groups[row.group_name]) groups[row.group_name] = []
+        groups[row.group_name].push({
+          team_id:   row.team_id,
+          team_name: row.team_name ?? '',
+          played:    row.played ?? 0,
+          won:       row.won ?? 0,
+          drawn:     row.drawn ?? 0,
+          lost:      row.lost ?? 0,
+          gf:        row.goals_for ?? 0,
+          ga:        row.goals_against ?? 0,
+          gd:        row.goal_difference ?? 0,
+          pts:       row.points ?? 0,
+          form:      row.form
+            ? String(row.form).split('').filter((c: string) => ['W','D','L'].includes(c))
+            : [],
+        })
+      }
+      if (Object.keys(groups).length > 0) return groups
+    }
+  } catch { /* fall through */ }
+
+  // Layer 2: derive from match results in Supabase
   const events = await getEvents()
   const groups: Record<string, Record<number, GroupTeamStat>> = {}
 
@@ -356,7 +388,7 @@ export async function getGroupStandings(): Promise<Record<string, GroupTeamStat[
       away.gf += as_; away.ga += hs; away.gd = away.gf - away.ga
       if      (hs > as_) { home.won++; home.pts += 3; away.lost++; home.form.unshift('W'); away.form.unshift('L') }
       else if (hs < as_) { away.won++; away.pts += 3; home.lost++; home.form.unshift('L'); away.form.unshift('W') }
-      else               { home.drawn++; home.pts++;   away.drawn++; away.pts++;         home.form.unshift('D'); away.form.unshift('D') }
+      else               { home.drawn++; home.pts++;   away.drawn++; away.pts++;            home.form.unshift('D'); away.form.unshift('D') }
     }
   }
 
@@ -367,6 +399,32 @@ export async function getGroupStandings(): Promise<Record<string, GroupTeamStat[
     )
   }
   return sorted
+}
+
+/* ── Tournament top scorers ── */
+export interface TopScorer {
+  player_id: number
+  player_name: string | null
+  short_name: string | null
+  team_id: number | null
+  team_name: string | null
+  image_url: string | null
+  goals: number
+  assists: number
+  penalties: number
+  matches_played: number
+  rank: number | null
+}
+
+export async function getTopScorers(limit = 10): Promise<TopScorer[]> {
+  const { data, error } = await supabaseServer
+    .from('top_scorers')
+    .select('*')
+    .order('goals', { ascending: false })
+    .order('assists', { ascending: false })
+    .limit(limit)
+  if (error || !data) return []
+  return data as TopScorer[]
 }
 
 /* ── Live matches ── */

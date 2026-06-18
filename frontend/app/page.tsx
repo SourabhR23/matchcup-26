@@ -2,6 +2,7 @@ import {
   getRecentResults,
   getUpcomingMatches,
   getGroupStandings,
+  getTopScorers,
   TOTAL_NATIONS,
   TOTAL_GROUPS,
   TOTAL_MATCHES,
@@ -11,6 +12,7 @@ import LiveMatchCard from '@/components/LiveMatchCard'
 import LiveSection from '@/components/LiveSection'
 import UpcomingRow from '@/components/UpcomingRow'
 import HomeStandingsWidget from '@/components/HomeStandingsWidget'
+import TopScorersWidget from '@/components/TopScorersWidget'
 import TournamentTimeline from '@/components/TournamentTimeline'
 import fadeStyles from '@/components/ScrollFade.module.css'
 import type { GroupTeamStat } from '@/lib/types'
@@ -69,6 +71,7 @@ export default async function OverviewPage() {
   const recentResults = await getRecentResults(2)
   const upcomingMatches = await getUpcomingMatches(8)
   const venueCount = await getVenueCount()
+  const topScorers = await getTopScorers(10)
   const allStandings = await getGroupStandings()
   const sortedGroups: [string, GroupTeamStat[]][] = Object.entries(allStandings).sort(([a], [b]) => a.localeCompare(b))
 
@@ -115,7 +118,14 @@ export default async function OverviewPage() {
         </section>
       )}
 
-      {/* ══ 5. STANDINGS ══ */}
+      {/* ══ 5. TOP SCORERS ══ */}
+      {topScorers.length > 0 && (
+        <section className="mb-8">
+          <TopScorersWidget scorers={topScorers} />
+        </section>
+      )}
+
+      {/* ══ 6. STANDINGS ══ */}
       {sortedGroups.length > 0 && (
         <section className="mb-8">
           <HomeStandingsWidget groups={sortedGroups} />

@@ -777,6 +777,141 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
     return True
 
 
+# ── Pre-fill referee names for upcoming matches ───────────────────────────────
+def prefill_upcoming_referees():
+    """For upcoming matches where referee_id is set but referee_name is NULL, fill from referees table or BSD API."""
+    print('\n  prefill_upcoming_referees …')
+    res = sb.table('matches') \
+            .select('id,referee_id') \
+            .neq('status', 'finished') \
+            .not_.is_('referee_id', 'null') \
+            .is_('referee_name', 'null') \
+            .execute()
+    rows = res.data or []
+    print(f'    {len(rows)} upcoming match(es) with referee_id but no referee_name')
+    if not rows:
+        return 0
+
+    all_refs = sb.table('referees').select('id,name').execute().data or []
+    ref_map = {r['id']: r['name'] for r in all_refs if r.get('name')}
+
+    filled = 0
+    for row in rows:
+        rid = row['referee_id']
+        name = ref_map.get(rid)
+        if not name:
+            data = get(f'/api/v2/referees/{rid}/')
+            name = nv((data or {}).get('name')) if isinstance(data, dict) else None
+            if name:
+                ref_map[rid] = name
+                sb.table('referees').upsert([{'id': rid, 'name': name}], on_conflict='id').execute()
+                print(f'    {rid}: {name} (fetched from BSD)')
+            else:
+                print(f'    {rid}: not found on BSD')
+                continue
+            time.sleep(DELAY)
+        if name:
+            sb.table('matches').update({'referee_name': name}).eq('id', row['id']).execute()
+            filled += 1
+
+    print(f'    Pre-filled referee_name for {filled} upcoming match(es)')
+    return filled
+
+
+# ── Tournament top scorers ────────────────────────────────────────────────────
+def fetch_top_scorers():
+    """Fetch WC2026 top scorers from BSD and upsert into top_scorers table."""
+    print('\n  fetch_top_scorers …')
+    data = get(f'/api/v2/leagues/27/top-scorers/?season_id=188')
+    if not data:
+        print('    FAILED or no data'); return 0
+    results = data.get('results', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    print(f'    {len(results)} top scorer entries from BSD')
+    if not results:
+        return 0
+    rows = []
+    for p in results:
+        player = p.get('player') or {}
+        team   = p.get('team') or {}
+        rows.append({
+            'player_id':      ni(player.get('id') or p.get('player_id')),
+            'player_name':    nv(player.get('name') or p.get('player_name') or p.get('name')),
+            'short_name':     nv(player.get('short_name') or p.get('short_name')),
+            'team_id':        ni(team.get('id') or p.get('team_id')),
+            'team_name':      nv(team.get('name') or p.get('team_name')),
+            'image_url':      nv(player.get('image_url') or p.get('image_url')),
+            'goals':          ni(p.get('goals') or p.get('total_goals')),
+            'assists':        ni(p.get('assists') or p.get('goal_assist')),
+            'penalties':      ni(p.get('penalty_goals') or p.get('penalties')),
+            'matches_played': ni(p.get('matches_played') or p.get('appearances')),
+            'minutes_played': ni(p.get('minutes_played')),
+            'rank':           ni(p.get('rank') or p.get('position')),
+        })
+    rows = [r for r in rows if r.get('player_id')]
+    if rows:
+        upsert('top_scorers', rows, 'player_id', label=f'({len(rows)} scorers)')
+    return len(rows)
+
+
+# ── Tournament group standings ────────────────────────────────────────────────
+def fetch_standings():
+    """Fetch WC2026 group standings from BSD and upsert into tournament_standings table."""
+    print('\n  fetch_standings …')
+    # Try multiple BSD endpoint patterns for standings/groupings
+    data = None
+    for endpoint in [
+        '/api/v2/leagues/27/standings/?season_id=188',
+        '/api/v2/leagues/27/groupings/?season_id=188',
+        '/api/v2/seasons/188/standings/',
+        '/api/v2/seasons/188/groupings/',
+    ]:
+        data = get(endpoint)
+        if data:
+            print(f'    Got data from {endpoint}')
+            break
+        time.sleep(DELAY)
+    if not data:
+        print('    FAILED: no standings data from any endpoint'); return 0
+    # BSD may return {standings: [...]} or {results: [...]} or {groups: [...]} or flat list
+    groups = []
+    if isinstance(data, dict):
+        groups = (data.get('standings') or data.get('results') or
+                  data.get('groups') or data.get('groupings') or [])
+    elif isinstance(data, list):
+        groups = data
+    if not groups:
+        print(f'    No standings data in response — keys: {list(data.keys()) if isinstance(data, dict) else type(data)}'); return 0
+
+    rows = []
+    for entry in groups:
+        # Handle grouped format: {group_name, rows/teams: [...]}
+        group_name = nv(entry.get('group_name') or entry.get('group') or entry.get('name'))
+        teams = entry.get('rows') or entry.get('teams') or entry.get('standings') or []
+        if not teams and entry.get('team_id'):
+            teams = [entry]
+        for t in teams:
+            team = t.get('team') or {}
+            rows.append({
+                'group_name':      group_name or nv(t.get('group_name')),
+                'team_id':         ni(team.get('id') or t.get('team_id')),
+                'team_name':       nv(team.get('name') or t.get('team_name') or t.get('name')),
+                'position':        ni(t.get('position') or t.get('rank') or t.get('pos')),
+                'played':          ni(t.get('matches_played') or t.get('played') or t.get('mp')),
+                'won':             ni(t.get('wins') or t.get('won') or t.get('w')),
+                'drawn':           ni(t.get('draws') or t.get('drawn') or t.get('d')),
+                'lost':            ni(t.get('losses') or t.get('lost') or t.get('l')),
+                'goals_for':       ni(t.get('goals_scored') or t.get('goals_for') or t.get('gf')),
+                'goals_against':   ni(t.get('goals_conceded') or t.get('goals_against') or t.get('ga')),
+                'goal_difference': ni(t.get('goal_difference') or t.get('gd')),
+                'points':          ni(t.get('points') or t.get('pts')),
+                'form':            nv(t.get('form')),
+            })
+    rows = [r for r in rows if r.get('team_id') and r.get('group_name')]
+    if rows:
+        upsert('tournament_standings', rows, 'group_name,team_id', label=f'({len(rows)} team rows)')
+    return len(rows)
+
+
 # ── Cron mode: query Supabase → process newly finished ───────────────────────
 def run_cron():
     print(f'[{datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}] Cron run started')
@@ -816,6 +951,14 @@ def run_cron():
         if collect_event(row['id'], save_local=True):
             collected += 1
         time.sleep(0.3)
+
+    # Step 3: pre-fill referee names for upcoming matches (assigned 2-3 days early)
+    prefill_upcoming_referees()
+
+    # Step 4: refresh top scorers + group standings after every run
+    if collected > 0:
+        fetch_top_scorers()
+        fetch_standings()
 
     print(f'\nCron done. Collected {collected} event(s).')
     return collected
@@ -888,6 +1031,8 @@ def main():
     parser.add_argument('--backfill-local',         action='store_true', help='Read all local BSD/completed_v2/event_*/detail.json and upsert to matches (no API calls)')
     parser.add_argument('--backfill-player-stats',  action='store_true', help='Read all local BSD/completed_v2/event_*/player_stats.json and upsert to player_match_stats')
     parser.add_argument('--fix-refs',        action='store_true', help='Fetch individual referee records for matches with NULL referee_name')
+    parser.add_argument('--prefill-refs',    action='store_true', help='Pre-fill referee names for upcoming matches where referee_id is already set')
+    parser.add_argument('--fetch-stats',     action='store_true', help='Fetch tournament top scorers + group standings from BSD → Supabase')
     parser.add_argument('--verify-coaches',  action='store_true', help='Cross-check coaches table vs managers table')
     parser.add_argument('--schema',          action='store_true', help='Print SQL to run in Supabase dashboard')
     args = parser.parse_args()
@@ -909,6 +1054,45 @@ def main():
         print()
         print("ALTER TABLE matches ADD CONSTRAINT IF NOT EXISTS fk_matches_venue")
         print("  FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE SET NULL;")
+        print()
+        print("NOTIFY pgrst, 'reload schema';")
+        print()
+        print("-- Top scorers table")
+        print("CREATE TABLE IF NOT EXISTS top_scorers (")
+        print("  player_id      INTEGER PRIMARY KEY,")
+        print("  player_name    TEXT,")
+        print("  short_name     TEXT,")
+        print("  team_id        INTEGER,")
+        print("  team_name      TEXT,")
+        print("  image_url      TEXT,")
+        print("  goals          INTEGER DEFAULT 0,")
+        print("  assists        INTEGER DEFAULT 0,")
+        print("  penalties      INTEGER DEFAULT 0,")
+        print("  matches_played INTEGER DEFAULT 0,")
+        print("  minutes_played INTEGER DEFAULT 0,")
+        print("  rank           INTEGER,")
+        print("  updated_at     TIMESTAMPTZ DEFAULT NOW()")
+        print(");")
+        print()
+        print("-- Group standings table")
+        print("CREATE TABLE IF NOT EXISTS tournament_standings (")
+        print("  id              SERIAL PRIMARY KEY,")
+        print("  group_name      TEXT NOT NULL,")
+        print("  team_id         INTEGER NOT NULL,")
+        print("  team_name       TEXT,")
+        print("  position        INTEGER,")
+        print("  played          INTEGER DEFAULT 0,")
+        print("  won             INTEGER DEFAULT 0,")
+        print("  drawn           INTEGER DEFAULT 0,")
+        print("  lost            INTEGER DEFAULT 0,")
+        print("  goals_for       INTEGER DEFAULT 0,")
+        print("  goals_against   INTEGER DEFAULT 0,")
+        print("  goal_difference INTEGER DEFAULT 0,")
+        print("  points          INTEGER DEFAULT 0,")
+        print("  form            TEXT,")
+        print("  updated_at      TIMESTAMPTZ DEFAULT NOW(),")
+        print("  UNIQUE (group_name, team_id)")
+        print(");")
         print()
         print("NOTIFY pgrst, 'reload schema';")
         return
@@ -933,6 +1117,16 @@ def main():
 
     if args.fix_refs:
         backfill_missing_referees()
+        return
+
+    if args.prefill_refs:
+        prefill_upcoming_referees()
+        return
+
+    if args.fetch_stats:
+        s = fetch_top_scorers()
+        g = fetch_standings()
+        print(f'\nDone — {s} top scorer(s), {g} standing row(s) updated.')
         return
 
     if args.verify_coaches:
