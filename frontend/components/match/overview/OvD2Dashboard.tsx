@@ -7,7 +7,7 @@ import IncidentTimeline from '@/components/IncidentTimeline'
 import TopPlayersSection from '../shared/TopPlayersSection'
 import MatchFactsSection from '../shared/MatchFactsSection'
 
-export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, incidents, hStats, aStats, hasStats, xgHome, xgAway, homeYellows, awayYellows, hPassAcc, aPassAcc, topPlayers, playerImageMap, bsdStats, prediction, venue, matchDate, roundLabel, referee, temperatureC, windSpeed, isLive }: OvProps) {
+export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, incidents, hStats, aStats, hasStats, xgHome, xgAway, homeYellows, awayYellows, hPassAcc, aPassAcc, topPlayers, playerImageMap, bsdStats, prediction, venue, matchDate, roundLabel, referee, temperatureC, windSpeed, weatherDescription, isLive }: OvProps) {
   const bsd = bsdStats?.stats
   const bigCards = [
     { label:'POSSESSION',     h:bsd?.home.ball_possession??0,  a:bsd?.away.ball_possession??0,  pct:true, avail:!!bsd },
@@ -29,14 +29,22 @@ export default function OvD2Dashboard({ homeTeam, awayTeam, homeAbbr, awayAbbr, 
     const time = dt.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'UTC' })
     return `${date} · ${time} UTC`
   }
+  const weatherStr = temperatureC != null
+    ? [
+        weatherDescription ? weatherDescription.charAt(0).toUpperCase() + weatherDescription.slice(1) : null,
+        `${temperatureC}°C`,
+        windSpeed != null ? `${windSpeed} km/h wind` : null,
+      ].filter(Boolean).join(' · ')
+    : null
+
   const factRows: [string, string][] = [
     ...(venue?.name ? [['Stadium', `${venue.name}${venue.city ? ` · ${venue.city}` : ''}`] as [string,string]] : []),
+    ...(weatherStr ? [['Weather', weatherStr] as [string,string]] : []),
     ...(venue?.capacity ? [['Capacity', venue.capacity.toLocaleString()] as [string,string]] : []),
     ...(venue?.country ? [['Country', venue.country] as [string,string]] : []),
     ...(matchDate ? [['Kickoff', fmtKickoff(matchDate)] as [string,string]] : []),
     ...(roundLabel ? [['Round', roundLabel] as [string,string]] : []),
     ...(referee ? [['Referee', referee] as [string,string]] : []),
-    ...(temperatureC != null ? [['Weather', `${temperatureC}°C${windSpeed != null ? ` · ${windSpeed} km/h wind` : ''}`] as [string,string]] : []),
     ['Competition', 'World Cup 2026'],
   ]
 

@@ -31,7 +31,7 @@ export interface OvProps {
   prediction: MatchTabsProps['prediction']
   venue?: { name?:string; city?:string; country?:string; capacity?:number } | null
   matchDate?: string|null; roundLabel?: string|null
-  referee?: string|null; temperatureC?: number|null; windSpeed?: number|null
+  referee?: string|null; temperatureC?: number|null; windSpeed?: number|null; weatherDescription?: string|null
   isLive?: boolean
 }
 
@@ -62,6 +62,7 @@ export interface MatchTabsProps {
   referee?: string | null
   temperatureC?: number | null
   windSpeed?: number | null
+  weatherDescription?: string | null
   playerMatchStats?: PlayerMatchStat[]
   homeTeamId?: number
   groupStandings?: GroupTeamStat[] | null

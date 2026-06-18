@@ -259,6 +259,8 @@ def backfill_local():
             'away_coach':          nv(away_coach.get('name')),
             'home_coach_id':       ni(detail.get('home_coach_id')),
             'away_coach_id':       ni(detail.get('away_coach_id')),
+            'period':              nv(detail.get('period')),
+            'current_minute':      ni(detail.get('current_minute')),
             'attendance':          ni(detail.get('attendance')),
             'temperature_c':       nf(weather.get('temperature_c') or detail.get('temperature_c')),
             'wind_speed':          nf(weather.get('wind_speed') or detail.get('wind_speed')),
@@ -267,6 +269,8 @@ def backfill_local():
             'pitch_condition':     ni(detail.get('pitch_condition')),
             'is_local_derby':      bool(detail.get('is_local_derby', False)),
             'is_neutral_ground':   bool(detail.get('is_neutral_ground', False)),
+            'penalty_shootout':    detail.get('penalty_shootout') or None,
+            'extra_time_score':    nv(detail.get('extra_time_score')),
             'h2h_data':            detail.get('head_to_head') or None,
             'highlights':          detail.get('highlights') or None,
         })
@@ -282,6 +286,60 @@ def backfill_local():
         except Exception as e:
             print(f'    ERR batch {i}: {e}')
     return len(rows)
+
+
+def backfill_player_stats():
+    """Read all local BSD/completed_v2/event_*/player_stats.json and upsert into player_match_stats."""
+    KEEP = {
+        'player_id', 'event_id', 'team_id', 'rating', 'minutes_played', 'touches',
+        'goals', 'goal_assist', 'expected_goals', 'expected_assists',
+        'total_shots', 'shots_on_target', 'key_pass',
+        'total_pass', 'accurate_pass', 'total_long_balls', 'accurate_long_balls',
+        'total_cross', 'accurate_cross', 'total_contest', 'won_contest',
+        'duel_won', 'duel_lost', 'aerial_won', 'aerial_lost',
+        'total_tackle', 'won_tackle', 'total_clearance', 'interception',
+        'ball_recovery', 'blocked_scoring_attempt', 'dispossessed', 'possession_lost',
+        'was_fouled', 'fouls', 'yellow_card', 'red_card',
+        'saves', 'goals_conceded', 'punches',
+    }
+
+    def _upsert_rows(rows):
+        """Upsert a batch; on FK violation fall back to row-by-row skipping unknown players."""
+        try:
+            sb.table('player_match_stats').upsert(rows, on_conflict='event_id,player_id').execute()
+            return len(rows)
+        except Exception as e:
+            if '23503' not in str(e):
+                raise
+        # FK violation — insert one by one, skip rows whose player_id isn't in players table
+        ok = 0
+        for row in rows:
+            try:
+                sb.table('player_match_stats').upsert([row], on_conflict='event_id,player_id').execute()
+                ok += 1
+            except Exception as e2:
+                if '23503' in str(e2):
+                    print(f'      SKIP player_id={row.get("player_id")} not in players table')
+                else:
+                    print(f'      ERR player_id={row.get("player_id")}: {e2}')
+        return ok
+
+    stat_files = sorted(CACHE_DIR.glob('event_*/player_stats.json'))
+    print(f'\n  backfill_player_stats: {len(stat_files)} player_stats.json files found')
+    total = 0
+    for path in stat_files:
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+            players = data.get('player_stats') or (data if isinstance(data, list) else [])
+            if not players:
+                continue
+            rows = [{k: v for k, v in p.items() if k in KEEP} for p in players if p.get('player_id')]
+            for i in range(0, len(rows), 50):
+                total += _upsert_rows(rows[i:i+50])
+        except Exception as e:
+            print(f'    ERR {path}: {e}')
+    print(f'  done — {total} player-stat rows upserted')
+    return total
 
 
 def backfill_venue_names():
@@ -484,6 +542,8 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         'away_coach':       nv(away_coach.get('name')),
         'home_coach_id':    home_coach_id,
         'away_coach_id':    away_coach_id,
+        'period':           nv(detail.get('period')),
+        'current_minute':   ni(detail.get('current_minute')),
         'attendance':          ni(detail.get('attendance')),
         'temperature_c':       nf(weather.get('temperature_c') or detail.get('temperature_c')),
         'wind_speed':          nf(weather.get('wind_speed') or detail.get('wind_speed')),
@@ -492,6 +552,8 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         'pitch_condition':     ni(detail.get('pitch_condition')),
         'is_local_derby':      bool(detail.get('is_local_derby', False)),
         'is_neutral_ground':   bool(detail.get('is_neutral_ground', False)),
+        'penalty_shootout':    detail.get('penalty_shootout') or None,
+        'extra_time_score':    nv(detail.get('extra_time_score')),
         'h2h_data':            detail.get('head_to_head') or None,
         'highlights':          detail.get('highlights') or None,
     }
@@ -504,7 +566,8 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
             es = str(e)
             # PostgREST schema cache hasn't picked up new columns yet — strip them and retry
             _new_cols = ('home_coach_id', 'away_coach_id', 'weather_code', 'weather_description',
-                         'pitch_condition', 'is_local_derby', 'is_neutral_ground', 'h2h_data', 'highlights')
+                         'pitch_condition', 'is_local_derby', 'is_neutral_ground', 'h2h_data', 'highlights',
+                         'penalty_shootout', 'extra_time_score', 'period', 'current_minute')
             if 'PGRST204' in es or any(c in es for c in _new_cols):
                 row = {k: v for k, v in row.items() if k not in _new_cols}
                 try:
@@ -546,48 +609,68 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
             continue
         team_id = ni(p.get('team_id')) or (home_id if p.get('is_home') else away_id)
         ps_rows.append({
-            'event_id':            event_id,
-            'player_id':           pid,
-            'team_id':             team_id,
-            'player_name':         nv(p.get('player_name') or p.get('name')),
-            'team_name':           nv(p.get('team_name') or p.get('team')),
-            'position':            nv(p.get('position') or p.get('specific_position')),
-            'rating':              nf(p.get('rating')),
-            'minutes_played':      ni(p.get('minutes_played')),
-            'goals':               ni(p.get('goals')),
-            'goal_assist':         ni(p.get('goal_assist') or p.get('assists')),
-            'expected_goals':      nf(p.get('expected_goals')),
-            'expected_assists':    nf(p.get('expected_assists')),
-            'total_shots':         ni(p.get('total_shots')),
-            'shots_on_target':     ni(p.get('shots_on_target')),
-            'total_pass':          ni(p.get('total_pass')),
-            'accurate_pass':       ni(p.get('accurate_pass')),
-            'key_pass':            ni(p.get('key_pass')),
-            'total_cross':         ni(p.get('total_cross')),
-            'accurate_cross':      ni(p.get('accurate_cross')),
-            'total_long_balls':    ni(p.get('total_long_balls')),
-            'accurate_long_balls': ni(p.get('accurate_long_balls')),
-            'dribble_attempted':   ni(p.get('dribble_attempted') or p.get('total_contest')),
-            'dribble_won':         ni(p.get('dribble_won') or p.get('won_contest')),
-            'duel_won':            ni(p.get('duel_won')),
-            'duel_lost':           ni(p.get('duel_lost')),
-            'won_tackle':          ni(p.get('won_tackle')),
-            'total_tackle':        ni(p.get('total_tackle')),
-            'interception':        ni(p.get('interception')),
-            'total_clearance':     ni(p.get('total_clearance')),
-            'fouls':               ni(p.get('fouls')),
-            'was_fouled':          ni(p.get('was_fouled')),
-            'yellow_card':         ni(p.get('yellow_card')),
-            'red_card':            ni(p.get('red_card')),
-            'saves':               ni(p.get('saves')),
-            'goals_conceded':      ni(p.get('goals_conceded')),
-            'touches':             ni(p.get('touches')),
-            'ball_recovery':       ni(p.get('ball_recovery')),
+            'event_id':                event_id,
+            'player_id':               pid,
+            'team_id':                 team_id,
+            'rating':                  nf(p.get('rating')),
+            'minutes_played':          ni(p.get('minutes_played')),
+            'goals':                   ni(p.get('goals')),
+            'goal_assist':             ni(p.get('goal_assist') or p.get('assists')),
+            'expected_goals':          nf(p.get('expected_goals')),
+            'expected_assists':        nf(p.get('expected_assists')),
+            'total_shots':             ni(p.get('total_shots')),
+            'shots_on_target':         ni(p.get('shots_on_target')),
+            'key_pass':                ni(p.get('key_pass')),
+            'total_pass':              ni(p.get('total_pass')),
+            'accurate_pass':           ni(p.get('accurate_pass')),
+            'total_long_balls':        ni(p.get('total_long_balls')),
+            'accurate_long_balls':     ni(p.get('accurate_long_balls')),
+            'total_cross':             ni(p.get('total_cross')),
+            'accurate_cross':          ni(p.get('accurate_cross')),
+            'total_contest':           ni(p.get('total_contest') or p.get('dribble_attempted')),
+            'won_contest':             ni(p.get('won_contest') or p.get('dribble_won')),
+            'duel_won':                ni(p.get('duel_won')),
+            'duel_lost':               ni(p.get('duel_lost')),
+            'aerial_won':              ni(p.get('aerial_won')),
+            'aerial_lost':             ni(p.get('aerial_lost')),
+            'total_tackle':            ni(p.get('total_tackle')),
+            'won_tackle':              ni(p.get('won_tackle')),
+            'total_clearance':         ni(p.get('total_clearance')),
+            'interception':            ni(p.get('interception')),
+            'ball_recovery':           ni(p.get('ball_recovery')),
+            'blocked_scoring_attempt': ni(p.get('blocked_scoring_attempt')),
+            'dispossessed':            ni(p.get('dispossessed')),
+            'possession_lost':         ni(p.get('possession_lost')),
+            'was_fouled':              ni(p.get('was_fouled')),
+            'fouls':                   ni(p.get('fouls')),
+            'yellow_card':             ni(p.get('yellow_card')),
+            'red_card':                ni(p.get('red_card')),
+            'saves':                   ni(p.get('saves')),
+            'goals_conceded':          ni(p.get('goals_conceded')),
+            'punches':                 ni(p.get('punches')),
+            'touches':                 ni(p.get('touches')),
         })
 
     if ps_rows:
         for i in range(0, len(ps_rows), 50):
-            upsert('player_match_stats', ps_rows[i:i+50], 'event_id,player_id')
+            batch = ps_rows[i:i+50]
+            try:
+                sb.table('player_match_stats').upsert(batch, on_conflict='event_id,player_id').execute()
+                print(f'    OK  player_match_stats — {len(batch)} row(s)')
+            except Exception as e:
+                if '23503' not in str(e):
+                    print(f'    ERR player_match_stats — {e}')
+                    continue
+                # FK violation: insert row-by-row, skip players not yet in players table
+                ok = 0
+                for row in batch:
+                    try:
+                        sb.table('player_match_stats').upsert([row], on_conflict='event_id,player_id').execute()
+                        ok += 1
+                    except Exception as e2:
+                        if '23503' not in str(e2):
+                            print(f'    ERR player_match_stats row — {e2}')
+                print(f'    OK  player_match_stats — {ok}/{len(batch)} row(s) (FK skips applied)')
     time.sleep(DELAY)
 
     # ── 3. match_bsd_stats ──
@@ -756,7 +839,8 @@ def main():
     parser.add_argument('--all',      action='store_true', help='Re-collect all matches in Supabase')
     parser.add_argument('--force',    action='store_true', help='Re-collect even if already finished in Supabase')
     parser.add_argument('--populate',        action='store_true', help='Fetch all WC2026 managers + venues + referees from BSD → Supabase reference tables')
-    parser.add_argument('--backfill-local',  action='store_true', help='Read all local BSD/completed_v2/event_*/detail.json and upsert to matches (no API calls)')
+    parser.add_argument('--backfill-local',         action='store_true', help='Read all local BSD/completed_v2/event_*/detail.json and upsert to matches (no API calls)')
+    parser.add_argument('--backfill-player-stats',  action='store_true', help='Read all local BSD/completed_v2/event_*/player_stats.json and upsert to player_match_stats')
     parser.add_argument('--fix-refs',        action='store_true', help='Fetch individual referee records for matches with NULL referee_name')
     parser.add_argument('--verify-coaches',  action='store_true', help='Cross-check coaches table vs managers table')
     parser.add_argument('--schema',          action='store_true', help='Print SQL to run in Supabase dashboard')
@@ -795,6 +879,10 @@ def main():
         bv = backfill_venue_names()
         bc = backfill_coach_names()
         print(f'\nBackfill done — {n} match(es) upserted, {bv} venue(s) named, {bc} coach name(s) filled.')
+        return
+
+    if args.backfill_player_stats:
+        backfill_player_stats()
         return
 
     if args.fix_refs:

@@ -70,17 +70,35 @@ export default function MatchCard({ event, href }: MatchCardProps) {
 
       {/* footer */}
       <div
-        className="flex justify-between mt-2.5 pt-2 text-[10px] text-[#777]"
+        className="flex justify-between mt-2.5 pt-2 gap-2"
         style={{ borderTop: '0.5px solid #222' }}
       >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '55%' }}>
-          {event.referee?.name ?? date}
-        </span>
-        <span style={{ flexShrink: 0, marginLeft: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '45%' }}>
-          {event.venue
-            ? [event.venue.name, event.venue.city].filter(Boolean).join(' · ')
-            : '—'}
-        </span>
+        {/* referee */}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          {event.referee?.name ? (
+            <div style={{ fontSize: 9, color: '#555', letterSpacing: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ color: '#333' }}>REF · </span>{event.referee.name}
+            </div>
+          ) : (
+            <div style={{ fontSize: 9, color: '#333', letterSpacing: 1 }}>{date}</div>
+          )}
+        </div>
+        {/* venue */}
+        <div style={{ textAlign: 'right', flexShrink: 0, maxWidth: '55%' }}>
+          {event.venue?.name && (
+            <div style={{ fontSize: 9, color: '#e8e4dc', fontWeight: 600, letterSpacing: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {event.venue.name}
+            </div>
+          )}
+          {event.venue?.city && (
+            <div style={{ fontSize: 9, color: '#555', letterSpacing: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {event.venue.city.toUpperCase()}
+            </div>
+          )}
+          {!event.venue?.name && !event.venue?.city && (
+            <div style={{ fontSize: 9, color: '#333' }}>{date}</div>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -27,7 +27,7 @@ export default function MatchTabs({
   xgHome, xgAway, homeScorers, awayScorers,
   topPlayers, playerRosterImages, lineups, bsdStats, prediction,
   venue, matchDate, roundLabel, homeCoach, awayCoach,
-  referee, temperatureC, windSpeed,
+  referee, temperatureC, windSpeed, weatherDescription,
   playerMatchStats, homeTeamId,
   groupStandings, groupName, isLive,
 }: MatchTabsProps) {
@@ -74,7 +74,7 @@ export default function MatchTabs({
     homeYellows, awayYellows, homeReds, awayReds,
     hPassAcc, aPassAcc,
     topPlayers, playerImageMap, bsdStats, prediction,
-    venue, matchDate, roundLabel, referee, temperatureC, windSpeed, isLive,
+    venue, matchDate, roundLabel, referee, temperatureC, windSpeed, weatherDescription, isLive,
   }
 
   return (
@@ -225,7 +225,6 @@ export default function MatchTabs({
       {tab === 'playerstats' && playerMatchStats && playerMatchStats.length > 0 && (
         <PlayerStatsTab
           stats={playerMatchStats}
-          lineups={lineups ?? null}
           homeTeam={homeTeam}
           awayTeam={awayTeam}
           homeTeamId={homeTeamId ?? 0}

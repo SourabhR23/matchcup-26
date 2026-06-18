@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react'
 import type { PlayerMatchStat } from '@/lib/types'
-import type { LineupTeam } from '../types'
 
 type SubTab = 'top' | 'shots' | 'attack' | 'passes' | 'defense' | 'duels' | 'goalkeeping'
 
@@ -95,31 +94,17 @@ const ratingColor = (r: number) =>
 
 interface Props {
   stats: PlayerMatchStat[]
-  lineups: { home: LineupTeam; away: LineupTeam } | null
   homeTeam: string
   awayTeam: string
   homeTeamId: number
 }
 
-export default function PlayerStatsTab({ stats, lineups, homeTeam, awayTeam, homeTeamId }: Props) {
+export default function PlayerStatsTab({ stats, homeTeam, awayTeam, homeTeamId }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('top')
   const [sortKey, setSortKey] = useState<string>('rating')
   const [teamFilter, setTeamFilter] = useState<'all' | 'home' | 'away'>('all')
 
   const tabDef = TABS.find(t => t.id === subTab)!
-
-  // Build player_id → info map from lineup data
-  const playerInfoMap = useMemo(() => {
-    const map = new Map<number, { name: string; position: string; image_url?: string }>()
-    if (!lineups) return map
-    for (const p of [
-      ...lineups.home.players, ...lineups.home.substitutes,
-      ...lineups.away.players, ...lineups.away.substitutes,
-    ]) {
-      map.set(p.id, { name: p.name, position: p.position, image_url: p.image_url })
-    }
-    return map
-  }, [lineups])
 
   const rows = useMemo(() => {
     let filtered = [...stats]
@@ -200,16 +185,15 @@ export default function PlayerStatsTab({ stats, lineups, homeTeam, awayTeam, hom
           </thead>
           <tbody>
             {rows.map((p, i) => {
-              const info = playerInfoMap.get(p.player_id)
               const isHome = p.team_id === homeTeamId
-              const name = info?.name ?? `#${p.player_id}`
-              const pos  = info?.position ?? ''
-              const img  = info?.image_url
+              const name = p.player?.name ?? p.player?.short_name ?? `#${p.player_id}`
+              const pos  = p.player?.position ?? ''
+              const img  = p.player?.image_url ?? undefined
               const initials = name.trim().split(/\s+/).map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
               const rowBg = i % 2 === 0 ? '#111' : '#0f0f0f'
 
               return (
-                <tr key={p.id ?? i} style={{ borderBottom: '1px solid #161616', background: rowBg }}>
+                <tr key={`${p.event_id}-${p.player_id}`} style={{ borderBottom: '1px solid #161616', background: rowBg }}>
                   {/* Sticky player cell */}
                   <td style={{ padding: '7px 12px', position: 'sticky', left: 0, background: rowBg, zIndex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

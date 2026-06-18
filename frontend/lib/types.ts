@@ -78,12 +78,11 @@ export interface MatchEvent {
 
 /* ── Per-player match statistics (player_match_stats table) ── */
 export interface PlayerMatchStat {
-  id: number
   player_id: number
   event_id: number
   team_id: number
-  minutes_played: number
   rating: number | null
+  minutes_played: number
   touches: number
   goals: number
   goal_assist: number
@@ -119,6 +118,14 @@ export interface PlayerMatchStat {
   saves: number
   goals_conceded: number
   punches: number
+  // FK-joined from players table
+  player?: {
+    id: number
+    name: string | null
+    short_name: string | null
+    position: string | null
+    image_url: string | null
+  } | null
 }
 
 /* ── Team from real_teams.json ── */

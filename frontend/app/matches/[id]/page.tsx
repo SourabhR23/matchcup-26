@@ -85,8 +85,7 @@ export default async function MatchDetailPage({ params }: Params) {
   const awayFormation = lineups?.away?.formation ?? summary?.formations?.away ?? null
 
   /* Extended team stats — aggregate from player stats */
-  const homeId   = ev.home_team_id ?? 0
-  const homeName = homeTeam.toLowerCase()
+  const homeId = ev.home_team_id ?? 0
   const emptyStats = (): ExtStats => ({
     shots: 0, onTarget: 0, passes: 0, accuratePasses: 0,
     dribbles: 0, dribblesWon: 0, tackles: 0, tacklesWon: 0,
@@ -444,6 +443,7 @@ export default async function MatchDetailPage({ params }: Params) {
         referee={ev.referee?.name ?? null}
         temperatureC={ev.temperature_c ?? null}
         windSpeed={ev.wind_speed ?? null}
+        weatherDescription={ev.weather_description ?? null}
         bsdStats={bsdStats}
         venue={venue ?? null}
         matchDate={ev.event_date}

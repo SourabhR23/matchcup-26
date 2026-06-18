@@ -1,12 +1,13 @@
 'use client'
 
-export default function MatchFactsSection({ venue, matchDate, roundLabel, referee, temperatureC, windSpeed }: {
+export default function MatchFactsSection({ venue, matchDate, roundLabel, referee, temperatureC, windSpeed, weatherDescription }: {
   venue?: { name?: string; city?: string; country?: string; capacity?: number } | null
   matchDate?: string | null
   roundLabel?: string | null
   referee?: string | null
   temperatureC?: number | null
   windSpeed?: number | null
+  weatherDescription?: string | null
 }) {
   const fmtKickoff = (d: string) => {
     const dt = new Date(d)
@@ -15,14 +16,22 @@ export default function MatchFactsSection({ venue, matchDate, roundLabel, refere
     return `${date} · ${time} UTC`
   }
 
+  const weatherStr = temperatureC != null
+    ? [
+        weatherDescription ? weatherDescription.charAt(0).toUpperCase() + weatherDescription.slice(1) : null,
+        `${temperatureC}°C`,
+        windSpeed != null ? `${windSpeed} km/h wind` : null,
+      ].filter(Boolean).join(' · ')
+    : null
+
   const rows: [string, string][] = [
     ...(venue?.name ? [['Stadium', `${venue.name}${venue.city ? ` · ${venue.city}` : ''}`] as [string, string]] : []),
+    ...(weatherStr ? [['Weather', weatherStr] as [string, string]] : []),
     ...(venue?.capacity ? [['Capacity', venue.capacity.toLocaleString()] as [string, string]] : []),
     ...(venue?.country ? [['Country', venue.country] as [string, string]] : []),
     ...(matchDate ? [['Kickoff', fmtKickoff(matchDate)] as [string, string]] : []),
     ...(roundLabel ? [['Round', roundLabel] as [string, string]] : []),
     ...(referee ? [['Referee', referee] as [string, string]] : []),
-    ...(temperatureC != null ? [['Weather', `${temperatureC}°C${windSpeed != null ? ` · ${windSpeed} km/h wind` : ''}`] as [string, string]] : []),
     ['Competition', 'World Cup 2026'],
   ]
 

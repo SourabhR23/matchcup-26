@@ -178,8 +178,10 @@ export async function getMatchDetail(eventId: number): Promise<MatchDetail | nul
     .select(MATCH_SELECT)
     .eq('id', eventId)
     .single()
-  if (error || !data || data.status !== 'finished') return null
-  return rowToEvent(data) as MatchDetail
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row = data as any
+  if (error || !row || row.status !== 'finished') return null
+  return rowToEvent(row) as MatchDetail
 }
 
 /* ── Match incidents — fetched live from API ── */
@@ -240,14 +242,19 @@ export async function getMatchSummary(eventId: number): Promise<MatchSummary | n
   }
 }
 
-/* ── Player stats for a match from Supabase ── */
+/* ── Player stats for a match from Supabase, joined with players table for names ── */
 export async function getPlayerStats(eventId: number): Promise<PlayerMatchStat[]> {
   const { data, error } = await supabaseServer
     .from('player_match_stats')
+    .select('*, player:players!player_id(id, name, short_name, position, image_url)')
+    .eq('event_id', eventId)
+  if (!error && data && data.length > 0) return data as PlayerMatchStat[]
+  // Fallback: join may not be cached yet — fetch without join
+  const { data: plain } = await supabaseServer
+    .from('player_match_stats')
     .select('*')
     .eq('event_id', eventId)
-  if (error || !data) return []
-  return data as PlayerMatchStat[]
+  return (plain ?? []) as PlayerMatchStat[]
 }
 
 /* ── Match lineups — fetched live from API ── */
