@@ -872,18 +872,35 @@ def fetch_standings():
         time.sleep(DELAY)
     if not data:
         print('    FAILED: no standings data from any endpoint'); return 0
-    # BSD may return {standings: [...]} or {results: [...]} or {groups: [...]} or flat list
-    groups = []
-    if isinstance(data, dict):
-        groups = (data.get('standings') or data.get('results') or
-                  data.get('groups') or data.get('groupings') or [])
-    elif isinstance(data, list):
-        groups = data
-    if not groups:
-        print(f'    No standings data in response — keys: {list(data.keys()) if isinstance(data, dict) else type(data)}'); return 0
+
+    # Normalise response into a list of group objects
+    raw = []
+    if isinstance(data, list):
+        raw = data
+    elif isinstance(data, dict):
+        # Try known list-valued keys first
+        for key in ('standings', 'results', 'groups', 'groupings'):
+            val = data.get(key)
+            if val:
+                raw = val; break
+        # If still empty, check if the dict itself IS the group map: {"Group A": [...], ...}
+        if not raw:
+            raw = data  # will be handled as dict below
+
+    # Convert dict format {"Group A": [teams]} → list of {group_name, teams}
+    if isinstance(raw, dict):
+        raw = [{'group_name': gname, 'rows': gteams}
+               for gname, gteams in raw.items()
+               if isinstance(gteams, list)]
+
+    if not raw:
+        print(f'    No standings data parseable from response'); return 0
+    print(f'    {len(raw)} group entries found')
 
     rows = []
-    for entry in groups:
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
         # Handle grouped format: {group_name, rows/teams: [...]}
         group_name = nv(entry.get('group_name') or entry.get('group') or entry.get('name'))
         teams = entry.get('rows') or entry.get('teams') or entry.get('standings') or []

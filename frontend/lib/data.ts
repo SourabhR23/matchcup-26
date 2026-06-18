@@ -327,15 +327,38 @@ export async function getCompletedEventIds(): Promise<number[]> {
   return data.map((r) => r.id)
 }
 
+/* ── Build form map from WC-only match results in Supabase ── */
+async function buildFormMap(): Promise<Record<number, string[]>> {
+  const events = await getEvents()
+  const formMap: Record<number, string[]> = {}
+  const groupEvents = events
+    .filter(e => e.group_name?.startsWith('Group') && e.status === 'finished' && e.home_score !== null && e.away_score !== null)
+    .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime())
+  for (const ev of groupEvents) {
+    const homeId = ev.home_team_obj?.id ?? ev.home_team_id
+    const awayId = ev.away_team_obj?.id ?? ev.away_team_id
+    if (!homeId || !awayId) continue
+    if (!formMap[homeId]) formMap[homeId] = []
+    if (!formMap[awayId]) formMap[awayId] = []
+    const hs = ev.home_score!, as_ = ev.away_score!
+    if      (hs > as_) { formMap[homeId].push('W'); formMap[awayId].push('L') }
+    else if (hs < as_) { formMap[homeId].push('L'); formMap[awayId].push('W') }
+    else               { formMap[homeId].push('D'); formMap[awayId].push('D') }
+  }
+  return formMap
+}
+
 /* ── Group standings: try tournament_standings table (API), fall back to derived ── */
 export async function getGroupStandings(): Promise<Record<string, GroupTeamStat[]>> {
   // Layer 1: read from tournament_standings table (populated by pipeline --fetch-stats)
+  // Form is always derived from WC-only match results (BSD form includes non-WC games)
   try {
     const { data, error } = await supabaseServer
       .from('tournament_standings')
       .select('*')
       .order('position', { ascending: true })
     if (!error && data && data.length > 0) {
+      const formMap = await buildFormMap()
       const groups: Record<string, GroupTeamStat[]> = {}
       for (const row of data) {
         if (!row.group_name) continue
@@ -351,9 +374,7 @@ export async function getGroupStandings(): Promise<Record<string, GroupTeamStat[
           ga:        row.goals_against ?? 0,
           gd:        row.goal_difference ?? 0,
           pts:       row.points ?? 0,
-          form:      row.form
-            ? String(row.form).split('').filter((c: string) => ['W','D','L'].includes(c))
-            : [],
+          form:      formMap[row.team_id] ?? [],
         })
       }
       if (Object.keys(groups).length > 0) return groups
