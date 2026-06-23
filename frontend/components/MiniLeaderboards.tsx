@@ -20,43 +20,43 @@ function PlayerRow({ player, rank, format }: { player: MiniPlayerStat; rank: num
     <div style={{
       display: 'flex',
       alignItems: 'center',
-      gap: 8,
-      padding: '7px 12px',
+      gap: 10,
+      padding: '10px 14px',
       borderBottom: '1px solid #181818',
     }}>
       {/* Rank */}
-      <span style={{ fontSize: 10, color: rank <= 1 ? 'var(--color-accent)' : '#444', fontWeight: 700, width: 14, flexShrink: 0 }}>
+      <span style={{ fontSize: 12, color: rank <= 1 ? 'var(--color-accent)' : '#444', fontWeight: 700, width: 16, flexShrink: 0 }}>
         {rank}
       </span>
 
       {/* Photo */}
       <div style={{
-        width: 28, height: 28, borderRadius: '50%', background: '#1e1e1e',
+        width: 36, height: 36, borderRadius: '50%', background: '#1e1e1e',
         border: '1px solid #2a2a2a', flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
       }}>
         {player.image_url
-          ? <img src={player.image_url} width={28} height={28} alt={player.short_name} style={{ objectFit: 'cover', width: '100%', height: '100%' }} />
-          : <span style={{ fontSize: 8, fontWeight: 700, color: '#555' }}>{initials}</span>
+          ? <img src={player.image_url} width={36} height={36} alt={player.short_name} style={{ objectFit: 'cover', width: '100%', height: '100%' }} />
+          : <span style={{ fontSize: 10, fontWeight: 700, color: '#555' }}>{initials}</span>
         }
       </div>
 
       {/* Name + team */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#e8e4dc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#e8e4dc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {player.short_name}
         </div>
         {player.team_name && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}>
-            <FlagImg country={player.team_name} width={12} />
-            <span style={{ fontSize: 8, color: '#555', letterSpacing: 0.5 }}>{player.team_name}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <FlagImg country={player.team_name} width={14} />
+            <span style={{ fontSize: 10, color: '#555', letterSpacing: 0.5 }}>{player.team_name}</span>
           </div>
         )}
       </div>
 
       {/* Stat value */}
       <span style={{
-        fontSize: 13, fontWeight: 900, color: '#f5f0e8',
+        fontSize: 16, fontWeight: 900, color: '#f5f0e8',
         fontVariantNumeric: 'tabular-nums', flexShrink: 0,
       }}>
         {format(player.value)}
@@ -69,8 +69,8 @@ function LeaderColumn({ label, players, format }: { label: string; players: Mini
   if (!players.length) return null
   return (
     <div style={{ background: '#0d0d0d', border: '1px solid #1e1e1e' }}>
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #222' }}>
-        <span style={{ fontSize: 9, letterSpacing: 2, color: '#888', fontWeight: 700 }}>{label}</span>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid #222' }}>
+        <span style={{ fontSize: 11, letterSpacing: 2, color: '#888', fontWeight: 700 }}>{label}</span>
       </div>
       {players.map((p, i) => (
         <PlayerRow key={p.player_id} player={p} rank={i + 1} format={format} />
