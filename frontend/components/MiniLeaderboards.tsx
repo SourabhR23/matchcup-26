@@ -85,7 +85,7 @@ export default function MiniLeaderboards({ topRated, topScorers, topAssists }: P
   if (!hasAny) return null
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
       {COLUMNS.map(col => (
         <LeaderColumn key={col.key} label={col.label} players={data[col.key]} format={col.format} />
       ))}

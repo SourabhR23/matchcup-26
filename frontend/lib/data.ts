@@ -480,37 +480,75 @@ export async function getMiniLeaderboards(limit = 3): Promise<{
   topScorers: MiniPlayerStat[]
   topAssists: MiniPlayerStat[]
 }> {
-  const empty = { topRated: [], topScorers: [], topAssists: [] }
-  const { data: statRows } = await supabaseServer
-    .from('player_match_stats')
-    .select('player_id, player_name, team_name, goals, goal_assist, rating')
-  if (!statRows) return empty
+  // Top scorers + assists from the authoritative top_scorers table
+  const [{ data: scorerRows }, { data: assistRows }, { data: statRows }] = await Promise.all([
+    supabaseServer
+      .from('top_scorers')
+      .select('player_id, short_name, player_name, image_url, team_name, goals')
+      .order('goals', { ascending: false })
+      .limit(limit),
+    supabaseServer
+      .from('top_scorers')
+      .select('player_id, short_name, player_name, image_url, team_name, assists')
+      .order('assists', { ascending: false })
+      .limit(limit),
+    supabaseServer
+      .from('player_match_stats')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .select('player_id, team_name, rating, player:players!player_id(short_name, image_url)') as any,
+  ])
 
-  const agg: Record<number, { player_id: number; short_name: string; image_url: string | null; team_name: string; goals: number; assists: number; ratings: number[] }> = {}
-  for (const row of statRows) {
+  const topScorers: MiniPlayerStat[] = (scorerRows ?? [])
+    .filter((r: TopScorer) => (r.goals ?? 0) > 0)
+    .map((r: TopScorer) => ({
+      player_id: r.player_id,
+      short_name: r.short_name ?? r.player_name ?? '',
+      image_url:  r.image_url,
+      team_name:  r.team_name ?? '',
+      value:      r.goals ?? 0,
+    }))
+
+  const topAssists: MiniPlayerStat[] = (assistRows ?? [])
+    .filter((r: TopScorer) => (r.assists ?? 0) > 0)
+    .map((r: TopScorer) => ({
+      player_id: r.player_id,
+      short_name: r.short_name ?? r.player_name ?? '',
+      image_url:  r.image_url,
+      team_name:  r.team_name ?? '',
+      value:      r.assists ?? 0,
+    }))
+
+  // Top rated: average rating per player from match stats
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ratingAgg: Record<number, { player_id: number; short_name: string; image_url: string | null; team_name: string; ratings: number[] }> = {}
+  for (const row of (statRows ?? [])) {
     const pid = row.player_id
-    if (!pid || !row.player_name) continue
-    if (!agg[pid]) agg[pid] = { player_id: pid, short_name: row.player_name, image_url: null, team_name: row.team_name ?? '', goals: 0, assists: 0, ratings: [] }
-    agg[pid].goals   += row.goals       ?? 0
-    agg[pid].assists += row.goal_assist ?? 0
-    if (row.rating != null) agg[pid].ratings.push(Number(row.rating))
+    if (!pid || row.rating == null) continue
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pl = (row as any).player
+    if (!ratingAgg[pid]) ratingAgg[pid] = {
+      player_id: pid,
+      short_name: pl?.short_name ?? '',
+      image_url:  pl?.image_url  ?? null,
+      team_name:  row.team_name  ?? '',
+      ratings:    [],
+    }
+    ratingAgg[pid].ratings.push(Number(row.rating))
   }
 
-  const all = Object.values(agg)
-  const toStat = (arr: typeof all, val: (p: typeof all[0]) => number): MiniPlayerStat[] =>
-    arr
-      .map(p => ({ player_id: p.player_id, short_name: p.short_name, image_url: p.image_url, team_name: p.team_name, value: val(p) }))
-      .filter(p => p.value > 0)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, limit)
-
-  const topRated: MiniPlayerStat[] = all
+  const topRated: MiniPlayerStat[] = Object.values(ratingAgg)
     .filter(p => p.ratings.length > 0)
-    .map(p => ({ player_id: p.player_id, short_name: p.short_name, image_url: p.image_url, team_name: p.team_name, value: Math.round((p.ratings.reduce((s, r) => s + r, 0) / p.ratings.length) * 100) / 100 }))
+    .map(p => ({
+      player_id:  p.player_id,
+      short_name: p.short_name,
+      image_url:  p.image_url,
+      team_name:  p.team_name,
+      value:      Math.round((p.ratings.reduce((s, r) => s + r, 0) / p.ratings.length) * 100) / 100,
+    }))
     .sort((a, b) => b.value - a.value)
     .slice(0, limit)
 
-  return { topRated, topScorers: toStat(all, p => p.goals), topAssists: toStat(all, p => p.assists) }
+  return { topRated, topScorers, topAssists }
 }
 
 /* ── Live matches ── */
