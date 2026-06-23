@@ -498,9 +498,10 @@ export async function getMiniLeaderboards(limit = 3): Promise<{
       .select('player_id, team_name, rating, player:players!player_id(short_name, image_url)') as any,
   ])
 
-  const topScorers: MiniPlayerStat[] = (scorerRows ?? [])
-    .filter((r: TopScorer) => (r.goals ?? 0) > 0)
-    .map((r: TopScorer) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const topScorers: MiniPlayerStat[] = (scorerRows ?? [] as any[])
+    .filter((r: any) => (r.goals ?? 0) > 0)
+    .map((r: any) => ({
       player_id: r.player_id,
       short_name: r.short_name ?? r.player_name ?? '',
       image_url:  r.image_url,
@@ -508,9 +509,10 @@ export async function getMiniLeaderboards(limit = 3): Promise<{
       value:      r.goals ?? 0,
     }))
 
-  const topAssists: MiniPlayerStat[] = (assistRows ?? [])
-    .filter((r: TopScorer) => (r.assists ?? 0) > 0)
-    .map((r: TopScorer) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const topAssists: MiniPlayerStat[] = (assistRows ?? [] as any[])
+    .filter((r: any) => (r.assists ?? 0) > 0)
+    .map((r: any) => ({
       player_id: r.player_id,
       short_name: r.short_name ?? r.player_name ?? '',
       image_url:  r.image_url,
