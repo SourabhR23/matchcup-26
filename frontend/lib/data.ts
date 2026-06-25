@@ -817,6 +817,7 @@ export async function getTeamForm(teamId: number, limit = 10): Promise<TeamFormR
     .from('team_form')
     .select('event_id, opponent_name, opponent_id, competition, is_home, event_date, result, team_score, opponent_score, possession, shots, shots_on_target, xg, corners, yellow_cards, red_cards, pass_accuracy, big_chances')
     .eq('team_id', teamId)
+    .not('result', 'is', null)
     .order('event_date', { ascending: false })
     .limit(limit)
   if (error || !data) return []
