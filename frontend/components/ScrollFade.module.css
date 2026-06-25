@@ -29,3 +29,11 @@
   pointer-events: none;
   z-index: 2;
 }
+
+.hideScrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hideScrollbar::-webkit-scrollbar {
+  display: none;
+}

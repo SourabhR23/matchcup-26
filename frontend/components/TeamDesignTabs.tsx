@@ -28,13 +28,15 @@ export interface RosterPlayer {
 }
 
 export interface StatLeader {
-  name: string
-  pos: string
-  goals: number
-  assists: number
+  playerId:  number | null
+  name:      string
+  pos:       string
+  imageUrl:  string | null
+  goals:     number
+  assists:   number
   avgRating: string
-  yellow: number
-  red: number
+  yellow:    number
+  red:       number
 }
 
 export interface MatchStatRow {
@@ -359,7 +361,7 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
 
       {/* ── Tab Bar ── */}
       <div style={{ borderBottom: `2px solid #1a1a1a`, background: '#080808', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ display: 'flex', overflowX: 'auto' }}>
+        <div className={fadeStyles.hideScrollbar} style={{ display: 'flex', overflowX: 'auto' }}>
           {TABS.map(tab => (
             <button
               key={tab}
@@ -564,46 +566,69 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
               <div style={{ color: '#555', fontSize: 13 }}>No player stats available yet.</div>
             ) : (
               <>
-                <div style={{ fontSize: 9, letterSpacing: 3, color: accent, marginBottom: 16 }}>PLAYER STATS — WC 2026</div>
+                <div style={{ fontSize: 9, letterSpacing: 3, color: accent, marginBottom: 16 }}>PLAYER STATS — WC 2026 · RANKED BY RATING</div>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 480 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 520 }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid #1e1e1e' }}>
+                        <th style={{ padding: '8px 12px', width: 32, textAlign: 'center', fontSize: 9, letterSpacing: 2, color: '#555', fontWeight: 400 }}>#</th>
                         {['PLAYER', 'POS', 'GOALS', 'ASSISTS', 'AVG RTG', 'YC', 'RC'].map(h => (
                           <th key={h} style={{ padding: '8px 12px', textAlign: h === 'PLAYER' ? 'left' : 'center', fontSize: 9, letterSpacing: 2, color: '#777', fontWeight: 400, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {p.statLeaders.map((pl, i) => (
-                        <tr key={pl.name} style={{ borderBottom: '1px solid #111', background: i % 2 === 0 ? 'transparent' : '#0a0a0a' }}>
-                          <td style={{ padding: '10px 12px' }}>
-                            <div style={{ fontSize: 13, color: '#e8e4dc', fontWeight: 500 }}>{pl.name}</div>
-                          </td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                            <span style={{ fontSize: 9, color: POS_COLOR[pl.pos?.[0] ?? 'M'] ?? '#888', letterSpacing: 1 }}>{pl.pos}</span>
-                          </td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: pl.goals > 0 ? accent : '#444' }}>{pl.goals}</span>
-                          </td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: pl.assists > 0 ? '#fff' : '#444' }}>{pl.assists}</span>
-                          </td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                            <span style={{ fontSize: 13, color: pl.avgRating !== '—' ? '#aaa' : '#444' }}>{pl.avgRating}</span>
-                          </td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                            {pl.yellow > 0
-                              ? <span style={{ display: 'inline-flex', gap: 2 }}>{Array.from({ length: Math.min(pl.yellow, 3) }).map((_, j) => <span key={j} style={{ display: 'inline-block', width: 9, height: 12, background: '#facc15', borderRadius: 1 }} />)}</span>
-                              : <span style={{ color: '#333' }}>—</span>}
-                          </td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                            {pl.red > 0
-                              ? <span style={{ display: 'inline-block', width: 9, height: 12, background: '#ef4444', borderRadius: 1 }} />
-                              : <span style={{ color: '#333' }}>—</span>}
-                          </td>
-                        </tr>
-                      ))}
+                      {p.statLeaders.map((pl, i) => {
+                        const posKey  = pl.pos?.toUpperCase()?.[0] ?? 'M'
+                        const posColor = POS_COLOR[posKey in POS_COLOR ? posKey : 'M']
+                        const initials = pl.name.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()
+                        const ratingNum = pl.avgRating !== '—' ? parseFloat(pl.avgRating) : 0
+                        const ratingColor = ratingNum >= 8 ? '#22c55e' : ratingNum >= 6.5 ? accent : '#aaa'
+                        const playerContent = (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#1a1a1a', border: '1px solid #2a2a2a', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {pl.imageUrl
+                                ? <img src={pl.imageUrl} alt={pl.name} width={36} height={36} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                : <span style={{ fontSize: 10, fontWeight: 700, color: '#555' }}>{initials}</span>}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 13, color: pl.playerId ? '#e8e4dc' : '#aaa', fontWeight: 500 }}>{pl.name || '—'}</div>
+                            </div>
+                          </div>
+                        )
+                        return (
+                          <tr key={`${pl.name}-${i}`} style={{ borderBottom: '1px solid #111', background: i % 2 === 0 ? 'transparent' : '#0a0a0a' }}>
+                            <td style={{ textAlign: 'center', padding: '10px 8px', fontSize: 11, color: '#444', fontWeight: 700 }}>{i + 1}</td>
+                            <td style={{ padding: '10px 12px' }}>
+                              {pl.playerId
+                                ? <Link href={`/players/${pl.playerId}`} style={{ textDecoration: 'none' }}>{playerContent}</Link>
+                                : playerContent}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              <span style={{ fontSize: 9, color: posColor, letterSpacing: 1, background: `${posColor}18`, padding: '2px 6px', borderRadius: 3 }}>{pl.pos || '—'}</span>
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: pl.goals > 0 ? accent : '#333' }}>{pl.goals}</span>
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: pl.assists > 0 ? '#fff' : '#333' }}>{pl.assists}</span>
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: ratingColor }}>{pl.avgRating}</span>
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              {pl.yellow > 0
+                                ? <span style={{ display: 'inline-flex', gap: 2 }}>{Array.from({ length: Math.min(pl.yellow, 3) }).map((_, j) => <span key={j} style={{ display: 'inline-block', width: 9, height: 12, background: '#facc15', borderRadius: 1 }} />)}</span>
+                                : <span style={{ color: '#333' }}>—</span>}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              {pl.red > 0
+                                ? <span style={{ display: 'inline-block', width: 9, height: 12, background: '#ef4444', borderRadius: 1 }} />
+                                : <span style={{ color: '#333' }}>—</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -633,7 +658,7 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
                       <tbody>
                         {p.teamForm.map(row => {
                           const rc      = row.result === 'W' ? '#22c55e' : row.result === 'L' ? '#ef4444' : row.result === 'D' ? '#f59e0b' : '#555'
-                          const dateStr = new Date(row.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                          const dateStr = new Date(row.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                           const badge   = compBadge(row.competition)
                           const isWC26  = row.competition.toLowerCase().includes('world cup 2026')
                           const inner = (

@@ -111,7 +111,7 @@ export default async function TeamPage({ params }: Params) {
         gf,
         ga,
         result:      gf > ga ? 'W' : gf < ga ? 'L' : 'D',
-        date:        new Date(ev.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        date:        new Date(ev.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         roundName:   ev.round_name ?? '',
         possession:  getStat('ball_possession'),
         shots:       getStat('total_shots'),
@@ -142,24 +142,36 @@ export default async function TeamPage({ params }: Params) {
   })
 
   /* ── Player stats totals ── */
-  type RawTotals = { name: string; pos: string; goals: number; assists: number; ratings: number[]; yellow: number; red: number }
+  type RawTotals = { playerId: number | null; name: string; pos: string; imageUrl: string | null; goals: number; assists: number; ratings: Array<number>; yellow: number; red: number }
   const totalsMap = new Map<string, RawTotals>()
   for (const s of rawPlayerStats) {
-    const key      = String(s.player_id ?? s.player_name ?? '')
-    const existing = totalsMap.get(key) ?? { name: String(s.player_name ?? ''), pos: String(s.position ?? ''), goals: 0, assists: 0, ratings: [], yellow: 0, red: 0 }
-    existing.goals   += Number(s.goals       ?? 0)
-    existing.assists += Number(s.assists      ?? 0)
-    existing.yellow  += Number(s.yellow_cards ?? 0)
-    existing.red     += Number(s.red_cards    ?? 0)
-    if (s.rating) existing.ratings.push(Number(s.rating))
+    const pid      = s.player_id as number | null
+    const key      = String(pid ?? s.player_name ?? '')
+    if (!key) continue
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pl       = (s as any).player
+    const name     = pl?.short_name ?? String(s.player_name ?? '')
+    const imageUrl = pl?.image_url  ?? null
+    const existing = totalsMap.get(key) ?? { playerId: pid, name, pos: String(s.position ?? ''), imageUrl, goals: 0, assists: 0, ratings: [], yellow: 0, red: 0 }
+    existing.goals   += Number(s.goals        ?? 0)
+    existing.assists += Number(s.goal_assist   ?? 0)
+    existing.yellow  += Number(s.yellow_card   ?? 0)
+    existing.red     += Number(s.red_card      ?? 0)
+    if (s.rating) (existing.ratings as number[]).push(Number(s.rating))
     totalsMap.set(key, existing)
   }
   const statLeaders: StatLeader[] = [...totalsMap.values()]
-    .filter(p => p.goals > 0 || p.assists > 0 || p.yellow > 0 || p.red > 0 || p.ratings.length > 0)
-    .sort((a, b) => b.goals - a.goals || b.assists - a.assists)
+    .filter(p => p.ratings.length > 0 || p.goals > 0 || p.assists > 0 || p.yellow > 0 || p.red > 0)
+    .sort((a, b) => {
+      const ra = a.ratings.length > 0 ? a.ratings.reduce((s, r) => s + r, 0) / a.ratings.length : 0
+      const rb = b.ratings.length > 0 ? b.ratings.reduce((s, r) => s + r, 0) / b.ratings.length : 0
+      return rb - ra || b.goals - a.goals
+    })
     .map(p => ({
+      playerId:  p.playerId,
       name:      p.name,
       pos:       p.pos,
+      imageUrl:  p.imageUrl,
       goals:     p.goals,
       assists:   p.assists,
       avgRating: p.ratings.length > 0 ? (p.ratings.reduce((s, r) => s + r, 0) / p.ratings.length).toFixed(1) : '—',
@@ -194,7 +206,7 @@ export default async function TeamPage({ params }: Params) {
         ga,
         result:    gf > ga ? 'W' : gf < ga ? 'L' : 'D',
         roundName: ev.round_name ?? '',
-        date:      new Date(ev.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        date:      new Date(ev.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       }
     })
 

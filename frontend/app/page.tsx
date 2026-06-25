@@ -5,6 +5,7 @@ import {
   getTopScorers,
   getTournamentFacts,
   getMiniLeaderboards,
+  getTeams,
   TOTAL_NATIONS,
   TOTAL_GROUPS,
   TOTAL_MATCHES,
@@ -72,7 +73,7 @@ function BigStatCard({ value, label, accent }: { value: string | number; label: 
 }
 
 export default async function OverviewPage() {
-  const [recentResults, upcomingMatches, venueCount, topScorers, allStandings, facts, leaderboards] = await Promise.all([
+  const [recentResults, upcomingMatches, venueCount, topScorers, allStandings, facts, leaderboards, allTeams] = await Promise.all([
     getRecentResults(2),
     getUpcomingMatches(8),
     getVenueCount(),
@@ -80,6 +81,7 @@ export default async function OverviewPage() {
     getGroupStandings(),
     getTournamentFacts(),
     getMiniLeaderboards(3),
+    getTeams(),
   ])
   const sortedGroups: [string, GroupTeamStat[]][] = Object.entries(allStandings).sort(([a], [b]) => a.localeCompare(b))
 
@@ -150,7 +152,7 @@ export default async function OverviewPage() {
       {/* ══ 7. STANDINGS ══ */}
       {sortedGroups.length > 0 && (
         <section className="mb-8">
-          <HomeStandingsWidget groups={sortedGroups} />
+          <HomeStandingsWidget groups={sortedGroups} teams={allTeams} />
         </section>
       )}
 

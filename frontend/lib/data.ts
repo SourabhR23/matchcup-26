@@ -117,11 +117,12 @@ export async function getEvents(): Promise<MatchEvent[]> {
   return plain.map(rowToEvent)
 }
 
-/* ── Real teams (48 nations) ── */
+/* ── Real teams (48 nations) — exclude BSD knockout placeholder entries (NULL country) ── */
 export async function getTeams(): Promise<Team[]> {
   const { data, error } = await supabaseServer
     .from('teams')
     .select('*')
+    .not('country', 'is', null)
     .order('name', { ascending: true })
   if (error || !data) return []
   return data.map((r) => ({
@@ -653,6 +654,8 @@ export interface PlayerMatchHistoryRow {
   duel_lost: number | null
   yellow_card: number | null
   red_card: number | null
+  saves: number | null
+  goals_conceded: number | null
 }
 
 export async function getPlayerMatchHistory(playerId: number): Promise<PlayerMatchHistoryRow[]> {
@@ -711,8 +714,102 @@ export async function getPlayerMatchHistory(playerId: number): Promise<PlayerMat
       duel_lost:        n(s.duel_lost),
       yellow_card:      n(s.yellow_card),
       red_card:         n(s.red_card),
+      saves:            n(s.saves),
+      goals_conceded:   n(s.goals_conceded),
     }
   })
+}
+
+/* ── Radar chart percentile data vs position peers ── */
+export interface PlayerRadarData {
+  axes: string[]
+  values: number[]  // percentiles 0-100 for each axis
+}
+
+export async function getPlayerRadarData(playerId: number, posCode: string): Promise<PlayerRadarData | null> {
+  if (posCode === 'G') return null  // GK handled via stats block, not radar
+
+  const { data: rows } = await supabaseServer
+    .from('player_match_stats')
+    .select('player_id, minutes_played, goals, goal_assist, expected_goals, key_pass, total_pass, accurate_pass, won_tackle, total_tackle, duel_won, duel_lost')
+    .eq('position', posCode)
+    .not('player_id', 'is', null)
+
+  if (!rows || rows.length === 0) return null
+
+  type Agg = { mins: number; goals: number; ast: number; xg: number; kp: number; tp: number; ap: number; tw: number; t: number; dw: number; dl: number }
+  const peers: Record<number, Agg> = {}
+  const n = (v: unknown) => (v != null ? Number(v) : 0)
+
+  for (const r of rows) {
+    const pid = r.player_id as number
+    if (!pid) continue
+    if (!peers[pid]) peers[pid] = { mins: 0, goals: 0, ast: 0, xg: 0, kp: 0, tp: 0, ap: 0, tw: 0, t: 0, dw: 0, dl: 0 }
+    const s = peers[pid]
+    s.mins  += n(r.minutes_played);  s.goals += n(r.goals);        s.ast  += n(r.goal_assist)
+    s.xg    += n(r.expected_goals);  s.kp    += n(r.key_pass);     s.tp   += n(r.total_pass)
+    s.ap    += n(r.accurate_pass);   s.tw    += n(r.won_tackle);   s.t    += n(r.total_tackle)
+    s.dw    += n(r.duel_won);        s.dl    += n(r.duel_lost)
+  }
+
+  const qualified = Object.entries(peers).filter(([, s]) => s.mins >= 45)
+  if (qualified.length < 5) return null
+
+  const p90 = (v: number, m: number) => m > 0 ? (v / m) * 90 : 0
+  const pct  = (a: number, b: number) => b > 0 ? (a / b) * 100 : 0
+
+  type Metrics = { goals: number; ast: number; xg: number; kp: number; passAcc: number; tkl: number; duels: number }
+  const toM = (s: Agg): Metrics => ({
+    goals:   p90(s.goals, s.mins),
+    ast:     p90(s.ast, s.mins),
+    xg:      p90(s.xg, s.mins),
+    kp:      p90(s.kp, s.mins),
+    passAcc: pct(s.ap, s.tp),
+    tkl:     p90(s.tw, s.mins),
+    duels:   pct(s.dw, s.dw + s.dl),
+  })
+
+  const peerMetrics = qualified.map(([, s]) => toM(s))
+  const me = peers[playerId]
+  if (!me || me.mins < 1) return null
+  const pm = toM(me)
+
+  const percentile = (val: number, arr: number[]) =>
+    arr.length === 0 ? 50 : Math.round((arr.filter(v => v <= val).length / arr.length) * 100)
+
+  type AxisDef = { label: string; key: keyof Metrics }
+  const axesByPos: Record<string, AxisDef[]> = {
+    F: [
+      { label: 'Goals/90',  key: 'goals'   },
+      { label: 'Assists/90', key: 'ast'    },
+      { label: 'xG/90',     key: 'xg'     },
+      { label: 'Key Pass/90', key: 'kp'   },
+      { label: 'Pass%',     key: 'passAcc' },
+      { label: 'Duels Won', key: 'duels'  },
+    ],
+    M: [
+      { label: 'Goals/90',  key: 'goals'   },
+      { label: 'Assists/90', key: 'ast'    },
+      { label: 'Key Pass/90', key: 'kp'   },
+      { label: 'Pass%',     key: 'passAcc' },
+      { label: 'Tackles/90', key: 'tkl'   },
+      { label: 'Duels Won', key: 'duels'  },
+    ],
+    D: [
+      { label: 'Tackles/90', key: 'tkl'   },
+      { label: 'Duels Won', key: 'duels'  },
+      { label: 'Key Pass/90', key: 'kp'   },
+      { label: 'Pass%',     key: 'passAcc' },
+      { label: 'Goals/90',  key: 'goals'  },
+      { label: 'Assists/90', key: 'ast'   },
+    ],
+  }
+
+  const axes = (axesByPos[posCode] ?? axesByPos['F'])
+  return {
+    axes:   axes.map(a => a.label),
+    values: axes.map(a => percentile(pm[a.key], peerMetrics.map(p => p[a.key]))),
+  }
 }
 
 /* ── BSD team-side stats for a list of event IDs ── */
@@ -782,10 +879,11 @@ export async function getTeamManager(teamId: number): Promise<Manager | null> {
 /* ── Player stats aggregated across a team's matches ── */
 export async function getTeamPlayerStats(eventIds: number[]): Promise<Record<string, unknown>[]> {
   if (eventIds.length === 0) return []
-  const { data, error } = await supabaseServer
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabaseServer
     .from('player_match_stats')
-    .select('player_id, player_name, team_name, position, rating, goals, assists, yellow_cards, red_cards')
-    .in('event_id', eventIds)
+    .select('player_id, player_name, position, rating, goals, goal_assist, yellow_card, red_card, player:players!player_id(id, short_name, image_url)')
+    .in('event_id', eventIds) as any)
   if (error || !data) return []
   return data as Record<string, unknown>[]
 }

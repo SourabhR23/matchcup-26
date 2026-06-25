@@ -318,7 +318,8 @@ def backfill_local():
 def backfill_player_stats():
     """Read all local BSD/completed_v2/event_*/player_stats.json and upsert into player_match_stats."""
     KEEP = {
-        'player_id', 'event_id', 'player_name', 'team_id', 'team_name', 'rating', 'minutes_played', 'touches',
+        'player_id', 'event_id', 'player_name', 'team_id', 'team_name', 'position',
+        'rating', 'minutes_played', 'touches',
         'goals', 'goal_assist', 'expected_goals', 'expected_assists',
         'total_shots', 'shots_on_target', 'key_pass',
         'total_pass', 'accurate_pass', 'total_long_balls', 'accurate_long_balls',
@@ -351,8 +352,30 @@ def backfill_player_stats():
                     print(f'      ERR player_id={row.get("player_id")}: {e2}')
         return ok
 
+    def _enrich_rows(rows, player_cache):
+        """Fill player_name, position, team_name from players table when BSD didn't supply them."""
+        for row in rows:
+            cached = player_cache.get(row.get('player_id')) or {}
+            if not row.get('player_name'):
+                row['player_name'] = cached.get('name')
+            if not row.get('position'):
+                row['position'] = cached.get('position')
+            if not row.get('team_name'):
+                row['team_name'] = cached.get('national_team_name')
+        return rows
+
     stat_files = sorted(CACHE_DIR.glob('event_*/player_stats.json'))
     print(f'\n  backfill_player_stats: {len(stat_files)} player_stats.json files found')
+
+    # Pre-load all players once to avoid per-file queries
+    try:
+        _all_players = sb.table('players').select('id,name,position,national_team_name').execute().data or []
+        player_cache = {r['id']: r for r in _all_players}
+        print(f'  player cache: {len(player_cache)} players loaded')
+    except Exception as _e:
+        print(f'  WARN player cache failed — {_e}')
+        player_cache = {}
+
     total = 0
     for path in stat_files:
         try:
@@ -361,6 +384,7 @@ def backfill_player_stats():
             if not players:
                 continue
             rows = [{k: v for k, v in p.items() if k in KEEP} for p in players if p.get('player_id')]
+            rows = _enrich_rows(rows, player_cache)
             for i in range(0, len(rows), 50):
                 total += _upsert_rows(rows[i:i+50])
         except Exception as e:
@@ -855,6 +879,19 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
             json.dumps({'event_id': event_id, 'player_stats': players}, ensure_ascii=False, indent=2),
             encoding='utf-8')
 
+    # Build a player lookup map (name, position, national_team_name) to fill NULL fields at write time.
+    # This avoids needing a separate backfill SQL run after each match.
+    _pids = [ni(p.get('player_id') or p.get('id')) for p in players]
+    _pids = [x for x in _pids if x]
+    _player_cache: dict = {}
+    if _pids:
+        try:
+            _res = sb.table('players').select('id,name,position,national_team_name').in_('id', _pids).execute()
+            for _row in (_res.data or []):
+                _player_cache[_row['id']] = _row
+        except Exception as _e:
+            print(f'    WARN  player cache lookup failed — {_e}')
+
     ps_rows = []
     for p in players:
         pid = ni(p.get('player_id') or p.get('id'))
@@ -863,14 +900,17 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         is_home  = p.get('is_home', True)
         team_id  = ni(p.get('team_id')) or (home_id if is_home else away_id)
         pl_obj   = p.get('player') or {}
-        pl_name  = nv(pl_obj.get('name') or p.get('player_name') or p.get('name'))
-        tm_name  = nv(p.get('team_name') or (detail.get('home_team') if is_home else detail.get('away_team')))
+        _cached  = _player_cache.get(pid) or {}
+        pl_name  = nv(pl_obj.get('name') or p.get('player_name') or p.get('name') or _cached.get('name'))
+        tm_name  = nv(p.get('team_name') or (detail.get('home_team') if is_home else detail.get('away_team')) or _cached.get('national_team_name'))
+        pl_pos   = nv(pl_obj.get('position') or p.get('position') or _cached.get('position'))
         ps_rows.append({
             'event_id':                event_id,
             'player_id':               pid,
             'player_name':             pl_name,
             'team_id':                 team_id,
             'team_name':               tm_name,
+            'position':                pl_pos,
             'rating':                  nf(p.get('rating')),
             'minutes_played':          ni(p.get('minutes_played')),
             'goals':                   ni(p.get('goals')),
@@ -1248,6 +1288,86 @@ def repair_player_stats():
     return fixed
 
 
+# ── Refresh upcoming fixture team names from BSD ─────────────────────────────
+def refresh_upcoming_fixtures():
+    """
+    Re-fetches BSD event detail for every non-finished match and updates
+    home_team_id/name + away_team_id/name in Supabase.
+
+    BSD resolves knockout bracket placeholders (e.g. "W73" → "Argentina") as
+    soon as the determining match finishes. This step runs every cron cycle so
+    the matches table reflects real team names within one cron interval.
+    Also upserts updated team names into the teams table so placeholder entries
+    (2A, W73, etc.) get real names once BSD knows the teams.
+    """
+    print('\n  refresh_upcoming_fixtures …')
+    res = sb.table('matches') \
+            .select('id, home_team_name, away_team_name') \
+            .neq('status', 'finished') \
+            .execute()
+    upcoming = res.data or []
+    print(f'    {len(upcoming)} non-finished match(es) to refresh')
+
+    PLACEHOLDER_RE = __import__('re').compile(
+        r'^(W|L)\d+$|^\d[A-Z]$|^[A-Z]\d+$|^[A-Z]/[A-Z]|^\d[A-Z]/\d'
+    )
+
+    updated = 0
+    for row in upcoming:
+        eid = row['id']
+        detail = get(f'/api/v2/events/{eid}/')
+        if not detail:
+            time.sleep(DELAY); continue
+
+        new_home_id   = ni(detail.get('home_team_id'))
+        new_away_id   = ni(detail.get('away_team_id'))
+        new_home_name = nv(detail.get('home_team'))
+        new_away_name = nv(detail.get('away_team'))
+
+        updates: dict = {}
+        if new_home_id:   updates['home_team_id']   = new_home_id
+        if new_away_id:   updates['away_team_id']   = new_away_id
+        if new_home_name: updates['home_team_name'] = new_home_name
+        if new_away_name: updates['away_team_name'] = new_away_name
+
+        # Also carry through venue/referee/coach from detail (same PRESERVE_IF_SET logic)
+        venue = detail.get('venue') or {}
+        ref   = detail.get('referee') or {}
+        if isinstance(ref, str): ref = {'name': ref}
+        if venue.get('id'):   updates['venue_id']   = ni(venue.get('id'))
+        if venue.get('name'): updates['venue_name'] = nv(venue.get('name'))
+        if venue.get('city'): updates['venue_city'] = nv(venue.get('city'))
+        if ref.get('id'):     updates['referee_id'] = ni(ref.get('id'))
+        if ref.get('name'):   updates['referee_name'] = nv(ref.get('name'))
+
+        if updates:
+            try:
+                sb.table('matches').update(updates).eq('id', eid).execute()
+                updated += 1
+            except Exception as e:
+                print(f'    ERR match {eid}: {e}')
+
+        # If BSD now has a real team name for a placeholder entry, update teams table
+        for team_id, team_name in [(new_home_id, new_home_name), (new_away_id, new_away_name)]:
+            if not team_id or not team_name:
+                continue
+            if PLACEHOLDER_RE.match(team_name):
+                continue  # still a placeholder — nothing to update yet
+            # Real name detected — upsert so the teams table entry gets corrected
+            try:
+                sb.table('teams').upsert(
+                    [{'id': team_id, 'name': team_name, 'short_name': team_name}],
+                    on_conflict='id'
+                ).execute()
+            except Exception:
+                pass
+
+        time.sleep(DELAY)
+
+    print(f'    Updated {updated} upcoming match(es)')
+    return updated
+
+
 # ── Cron mode: query Supabase → process newly finished ───────────────────────
 def run_cron():
     print(f'[{datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}] Cron run started')
@@ -1298,6 +1418,9 @@ def run_cron():
 
     # Step 5: always repair broken player_name/team_name links
     repair_player_stats()
+
+    # Step 6: refresh upcoming fixture team names (resolves W73 → real team once bracket known)
+    refresh_upcoming_fixtures()
 
     print(f'\nCron done. Collected {collected} event(s).')
     return collected
@@ -1374,7 +1497,8 @@ def main():
     parser.add_argument('--fetch-stats',     action='store_true', help='Fetch tournament top scorers + group standings from BSD → Supabase')
     parser.add_argument('--repair-stats',    action='store_true', help='Backfill NULL player_name/team_name in player_match_stats from players/teams tables')
     parser.add_argument('--verify-coaches',  action='store_true', help='Cross-check coaches table vs managers table')
-    parser.add_argument('--populate-form',   action='store_true', help='Fetch recent match history for all teams from BSD → team_form table')
+    parser.add_argument('--populate-form',     action='store_true', help='Fetch recent match history for all teams from BSD → team_form table')
+    parser.add_argument('--refresh-upcoming', action='store_true', help='Re-fetch BSD event details for non-finished matches to resolve bracket placeholders (W73 → real team)')
     parser.add_argument('--schema',          action='store_true', help='Print SQL to run in Supabase dashboard')
     args = parser.parse_args()
 
@@ -1513,6 +1637,11 @@ def main():
     if args.populate_form:
         n = populate_team_form()
         print(f'\nDone — {n} team_form row(s) upserted.')
+        return
+
+    if args.refresh_upcoming:
+        n = refresh_upcoming_fixtures()
+        print(f'\nDone — {n} upcoming match(es) refreshed.')
         return
 
     if args.serve:

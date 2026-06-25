@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { getPlayer, getPlayerMatchHistory } from '@/lib/data'
+import { getPlayer, getPlayerMatchHistory, getPlayerRadarData } from '@/lib/data'
 import FlagImg from '@/components/FlagImg'
 import PlayerMatchHistory from '@/components/PlayerMatchHistory'
 import PlayerCharts from '@/components/PlayerCharts'
+import PlayerRadar from '@/components/PlayerRadar'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,22 +74,26 @@ export default async function PlayerPage({ params }: Params) {
   const playerId = parseInt(id, 10)
   if (isNaN(playerId)) return notFound()
 
-  const [rawPlayer, history] = await Promise.all([
-    getPlayer(playerId),
-    getPlayerMatchHistory(playerId),
-  ])
-
+  // Phase 1: get player first (need posCode for radar query)
+  const rawPlayer = await getPlayer(playerId)
   if (!rawPlayer) return notFound()
 
   const p = rawPlayer as unknown as Record<string, unknown>
-  const nTeamId   = (p.national_team_id   as number) ?? 0
-  const nTeamName = (p.national_team_name  as string) ?? (p.nationality as string) ?? '—'
-  const clubName  = (p.current_team_name   as string) ?? '—'
-  const posCode   = ((p.position as string) ?? '').toUpperCase()
-  const posLabel  = POS_MAP[posCode] ?? (p.position as string) ?? ''
-  const specificPos = (p.specific_position as string) ?? ''
+  const posCode     = ((p.position as string) ?? '').toUpperCase()
+  const nTeamId     = (p.national_team_id  as number) ?? 0
+  const nTeamName   = (p.national_team_name as string) ?? (p.nationality as string) ?? '—'
+  const clubName    = (p.current_team_name  as string) ?? '—'
+  const posLabel    = POS_MAP[posCode] ?? (p.position as string) ?? ''
+  const specificPos = (p.specific_position  as string) ?? ''
+  const isGK        = posCode === 'G'
 
-  // ── Aggregate WC stats ──────────────────────────────────
+  // Phase 2: parallel — history + radar
+  const [history, radarData] = await Promise.all([
+    getPlayerMatchHistory(playerId),
+    getPlayerRadarData(playerId, posCode),
+  ])
+
+  // ── Aggregate WC stats ─────────────────────────────────
   const apps           = history.length
   const totalMins      = sum(history.map(r => r.minutes_played))
   const totalGoals     = sum(history.map(r => r.goals))
@@ -113,9 +118,29 @@ export default async function PlayerPage({ params }: Params) {
   const totalRed       = sum(history.map(r => r.red_card))
   const shotAcc        = totalShots > 0 ? `${Math.round((totalOnTarget / totalShots) * 100)}%` : '—'
 
-  const showAttacking  = totalShots > 0 || totalXG > 0 || totalKP > 0
-  const showDefensive  = totalTklWon > 0 || totalInter > 0
-  const showDuels      = totalDuels > 0 || totalYellow > 0 || totalRed > 0
+  // GK-specific
+  const totalSaves         = sum(history.map(r => r.saves))
+  const totalGoalsConceded = sum(history.map(r => r.goals_conceded))
+  const saveRate           = (totalSaves + totalGoalsConceded) > 0
+    ? `${Math.round((totalSaves / (totalSaves + totalGoalsConceded)) * 100)}%` : '—'
+
+  const showAttacking = !isGK && (totalShots > 0 || totalXG > 0 || totalKP > 0)
+  const showDefensive = !isGK && (totalTklWon > 0 || totalInter > 0)
+  const showDuels     = totalDuels > 0 || totalYellow > 0 || totalRed > 0
+  const showGK        = isGK && apps > 0
+
+  // Hero quick stats differ for GKs
+  const heroStats = isGK
+    ? [
+        { v: apps,                         label: 'APPS'    },
+        { v: totalSaves,                   label: 'SAVES'   },
+        { v: avgRating?.toFixed(1) ?? '—', label: 'AVG RTG' },
+      ]
+    : [
+        { v: apps,                         label: 'APPS'    },
+        { v: totalGoals,                   label: 'GOALS'   },
+        { v: avgRating?.toFixed(1) ?? '—', label: 'AVG RTG' },
+      ]
 
   return (
     <div>
@@ -161,11 +186,7 @@ export default async function PlayerPage({ params }: Params) {
 
         {/* Quick stats */}
         <div className="grid grid-cols-3 gap-px" style={{ background: '#222' }}>
-          {[
-            { v: apps,                          label: 'APPS'    },
-            { v: totalGoals,                    label: 'GOALS'   },
-            { v: avgRating?.toFixed(1) ?? '—',  label: 'AVG RTG' },
-          ].map(({ v, label }) => (
+          {heroStats.map(({ v, label }) => (
             <div key={label} className="bg-[#1a1a1a] px-4 py-3 text-center">
               <div className="font-display leading-none" style={{ fontSize: 28, color: 'var(--color-accent)' }}>{v}</div>
               <div className="text-[9px] text-[#555] tracking-[1px] mt-1">{label}</div>
@@ -174,7 +195,7 @@ export default async function PlayerPage({ params }: Params) {
         </div>
       </div>
 
-      {/* ── Info + Stats ── */}
+      {/* ── Info + WC Stats ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
         {/* Player Info */}
@@ -206,33 +227,46 @@ export default async function PlayerPage({ params }: Params) {
           ) : (
             <>
               <StatBlock title="Summary" rows={[
-                ['Appearances',   apps],
+                ['Appearances',    apps],
                 ['Minutes Played', `${totalMins}'`],
-                ['Goals',         totalGoals],
-                ['Assists',       totalAssists],
-                ['Avg Rating',    avgRating?.toFixed(2) ?? '—'],
+                ['Goals',          totalGoals],
+                ['Assists',        totalAssists],
+                ['Avg Rating',     avgRating?.toFixed(2) ?? '—'],
               ]} />
 
+              {/* Goalkeeper section */}
+              {showGK && (
+                <StatBlock title="Goalkeeping" rows={[
+                  ['Saves',            totalSaves],
+                  ['Goals Conceded',   totalGoalsConceded],
+                  ['Save Rate',        saveRate],
+                  ['Pass Accuracy',    passAcc],
+                  ['Yellow Cards',     totalYellow],
+                  ['Red Cards',        totalRed],
+                ]} />
+              )}
+
+              {/* Outfield sections */}
               {showAttacking && (
                 <StatBlock title="Attacking" rows={[
-                  ['xG',           totalXG.toFixed(2)],
-                  ['xA',           totalXA.toFixed(2)],
-                  ['Shots',        totalShots],
-                  ['On Target',    totalOnTarget],
-                  ['Shot Accuracy', shotAcc],
-                  ['Key Passes',   totalKP],
-                  ['Pass Accuracy', passAcc],
+                  ['xG',             totalXG.toFixed(2)],
+                  ['xA',             totalXA.toFixed(2)],
+                  ['Shots',          totalShots],
+                  ['On Target',      totalOnTarget],
+                  ['Shot Accuracy',  shotAcc],
+                  ['Key Passes',     totalKP],
+                  ['Pass Accuracy',  passAcc],
                 ]} />
               )}
 
               {showDefensive && (
                 <StatBlock title="Defensive" rows={[
-                  ['Tackles Won',   `${totalTklWon} / ${totalTkl}`],
-                  ['Interceptions', totalInter],
+                  ['Tackles Won',    `${totalTklWon} / ${totalTkl}`],
+                  ['Interceptions',  totalInter],
                 ]} />
               )}
 
-              {showDuels && (
+              {showDuels && !isGK && (
                 <StatBlock title="Duels & Discipline" rows={[
                   ['Duels Won',    totalDuels > 0 ? `${totalDuelsWon} / ${totalDuels}${duelPct}` : '—'],
                   ['Yellow Cards', totalYellow],
@@ -244,11 +278,24 @@ export default async function PlayerPage({ params }: Params) {
         </div>
       </div>
 
-      {/* ── Match History (client, show-more) ── */}
+      {/* ── Match History ── */}
       <PlayerMatchHistory rows={history} />
 
-      {/* ── Charts ── */}
-      {history.length > 0 && <PlayerCharts rows={history} />}
+      {/* ── Charts + Radar ── */}
+      {history.length > 0 && (
+        <div className="mt-3 bg-surface border border-muted p-4">
+          <div className="font-display text-[16px] tracking-[2px] border-b-2 border-ink pb-1 mb-5">
+            PERFORMANCE CHARTS
+          </div>
+          {/* Charts take 2/3 width when radar present, full width otherwise */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className={radarData ? 'md:col-span-2' : 'md:col-span-3'}>
+              <PlayerCharts rows={history} />
+            </div>
+            {radarData && <PlayerRadar data={radarData} />}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

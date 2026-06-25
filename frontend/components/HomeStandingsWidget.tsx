@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import FlagImg from './FlagImg'
-import type { GroupTeamStat } from '@/lib/types'
+import type { GroupTeamStat, Team } from '@/lib/types'
 
 interface Props {
   groups: [string, GroupTeamStat[]][]
+  teams: Team[]
 }
 
 const FC: Record<string, string> = { W: '#16a34a', D: '#d97706', L: '#dc2626' }
@@ -22,18 +24,63 @@ function FormBadge({ r }: { r: string }) {
   )
 }
 
-export default function HomeStandingsWidget({ groups }: Props) {
+export default function HomeStandingsWidget({ groups, teams }: Props) {
+  const router   = useRouter()
   const [active, setActive] = useState(groups[0]?.[0] ?? '')
-  const teams = groups.find(([g]) => g === active)?.[1] ?? []
+  const tableTeams = groups.find(([g]) => g === active)?.[1] ?? []
+
+  const sortedTeams = [...teams].sort((a, b) => a.name.localeCompare(b.name))
+
+  function handleTeamSelect(e: React.ChangeEvent<HTMLSelectElement>) {
+    const id = e.target.value
+    if (id) router.push(`/teams/${id}`)
+    e.target.value = ''
+  }
 
   return (
     <div>
-      {/* Section head — mirrors UPCOMING MATCHES style */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '3px solid #111', paddingBottom: 6, marginBottom: 12 }}>
-        <h2 style={{ fontFamily: 'var(--font-bebas, sans-serif)', fontSize: 28, letterSpacing: 2, color: '#111', margin: 0 }}>STANDINGS</h2>
-        <Link href="/groups" style={{ fontSize: 9, color: '#111', letterSpacing: 1.5, textDecoration: 'none', fontWeight: 700, marginBottom: 4 }}>
-          FULL VIEW →
-        </Link>
+      {/* Section head */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+        borderBottom: '3px solid #111', paddingBottom: 6, marginBottom: 12,
+        gap: 10, flexWrap: 'wrap',
+      }}>
+        <h2 style={{
+          fontFamily: 'var(--font-bebas, sans-serif)', fontSize: 28,
+          letterSpacing: 2, color: '#111', margin: 0,
+        }}>STANDINGS</h2>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* 48-team selector */}
+          {sortedTeams.length > 0 && (
+            <select
+              onChange={handleTeamSelect}
+              defaultValue=""
+              style={{
+                fontSize: 9, letterSpacing: 1, fontWeight: 700,
+                color: '#111', background: 'transparent',
+                border: '0.5px solid #bbb', padding: '3px 8px',
+                cursor: 'pointer', outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            >
+              <option value="" disabled>SELECT TEAM</option>
+              {sortedTeams.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          )}
+
+          <Link
+            href="/groups"
+            style={{
+              fontSize: 9, color: '#111', letterSpacing: 1.5,
+              textDecoration: 'none', fontWeight: 700, whiteSpace: 'nowrap',
+            }}
+          >
+            FULL VIEW →
+          </Link>
+        </div>
       </div>
 
       {/* Group tabs */}
@@ -72,7 +119,7 @@ export default function HomeStandingsWidget({ groups }: Props) {
             </tr>
           </thead>
           <tbody>
-            {teams.map((t, i) => (
+            {tableTeams.map((t, i) => (
               <tr key={t.team_id} style={{ borderBottom: '1px solid #181818' }}>
                 {/* Rank */}
                 <td style={{ padding: '10px 5px 10px 14px', whiteSpace: 'nowrap' }}>
@@ -83,13 +130,28 @@ export default function HomeStandingsWidget({ groups }: Props) {
                     <span style={{ color: '#999', fontSize: 11 }}>{i + 1}</span>
                   </div>
                 </td>
-                {/* Team */}
+
+                {/* Team — clickable */}
                 <td style={{ padding: '10px 5px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <Link
+                    href={`/teams/${t.team_id}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 7,
+                      textDecoration: 'none',
+                    }}
+                  >
                     <FlagImg country={t.team_name} width={20} />
-                    <span style={{ color: '#ddd', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.team_name}</span>
-                  </div>
+                    <span style={{
+                      color: '#ddd', fontSize: 13,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      transition: 'color 0.12s',
+                    }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#ddd')}
+                    >{t.team_name}</span>
+                  </Link>
                 </td>
+
                 {/* Stats */}
                 <td style={{ padding: '10px 5px', textAlign: 'center', color: '#aaa', fontSize: 12 }}>{t.played}</td>
                 <td style={{ padding: '10px 5px', textAlign: 'center', color: '#aaa', fontSize: 12 }}>{t.won}</td>
@@ -98,11 +160,13 @@ export default function HomeStandingsWidget({ groups }: Props) {
                 <td style={{ padding: '10px 5px', textAlign: 'center', fontSize: 12, color: t.gd > 0 ? '#f5f0e8' : t.gd < 0 ? '#777' : '#aaa' }}>
                   {t.gd > 0 ? '+' + t.gd : t.gd}
                 </td>
+
                 {/* PTS */}
                 <td style={{ padding: '10px 5px', textAlign: 'center', fontWeight: 900, fontSize: 18, color: '#f5f0e8', fontVariantNumeric: 'tabular-nums' }}>
                   {t.pts}
                 </td>
-                {/* FORM last — newest first, max 3 */}
+
+                {/* FORM */}
                 <td style={{ padding: '10px 14px 10px 5px', textAlign: 'right' }}>
                   <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
                     {t.form.slice(0, 3).map((r, fi) => <FormBadge key={fi} r={r} />)}

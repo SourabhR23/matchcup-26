@@ -118,20 +118,16 @@ function GoalsXgChart({ rows }: { rows: PlayerMatchHistoryRow[] }) {
   )
 }
 
+// Renders chart content only — outer container and title are provided by the parent page
 export default function PlayerCharts({ rows }: { rows: PlayerMatchHistoryRow[] }) {
   const hasRatings = rows.some(r => r.rating != null)
   const hasGoalsXg = rows.some(r => (r.goals ?? 0) > 0 || (r.expected_goals ?? 0) > 0)
   if (!hasRatings && !hasGoalsXg) return null
 
   return (
-    <div className="bg-surface border border-muted mt-3 p-4">
-      <div className="font-display text-[16px] tracking-[2px] border-b-2 border-ink pb-1 mb-5">
-        PERFORMANCE CHARTS
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {hasRatings && <RatingChart rows={rows} />}
-        {hasGoalsXg && <GoalsXgChart rows={rows} />}
-      </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      {hasRatings && <RatingChart rows={rows} />}
+      {hasGoalsXg && <GoalsXgChart rows={rows} />}
     </div>
   )
 }
