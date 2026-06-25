@@ -291,7 +291,7 @@ def backfill_local():
 def backfill_player_stats():
     """Read all local BSD/completed_v2/event_*/player_stats.json and upsert into player_match_stats."""
     KEEP = {
-        'player_id', 'event_id', 'team_id', 'rating', 'minutes_played', 'touches',
+        'player_id', 'event_id', 'player_name', 'team_id', 'team_name', 'rating', 'minutes_played', 'touches',
         'goals', 'goal_assist', 'expected_goals', 'expected_assists',
         'total_shots', 'shots_on_target', 'key_pass',
         'total_pass', 'accurate_pass', 'total_long_balls', 'accurate_long_balls',
@@ -653,11 +653,17 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         pid = ni(p.get('player_id') or p.get('id'))
         if not pid:
             continue
-        team_id = ni(p.get('team_id')) or (home_id if p.get('is_home') else away_id)
+        is_home  = p.get('is_home', True)
+        team_id  = ni(p.get('team_id')) or (home_id if is_home else away_id)
+        pl_obj   = p.get('player') or {}
+        pl_name  = nv(pl_obj.get('name') or p.get('player_name') or p.get('name'))
+        tm_name  = nv(p.get('team_name') or (detail.get('home_team') if is_home else detail.get('away_team')))
         ps_rows.append({
             'event_id':                event_id,
             'player_id':               pid,
+            'player_name':             pl_name,
             'team_id':                 team_id,
+            'team_name':               tm_name,
             'rating':                  nf(p.get('rating')),
             'minutes_played':          ni(p.get('minutes_played')),
             'goals':                   ni(p.get('goals')),
@@ -929,6 +935,107 @@ def fetch_standings():
     return len(rows)
 
 
+# ── Data repair: backfill NULL player_name / team_name in player_match_stats ──
+def repair_player_stats():
+    """
+    Finds player_match_stats rows where player_name or team_name is NULL
+    and backfills them from the players + teams reference tables.
+    Safe to run every cron cycle — only touches rows that need fixing.
+    """
+    print('\n  repair_player_stats …')
+
+    # Find all stat rows with missing player_name
+    res = sb.table('player_match_stats') \
+            .select('player_id, team_id') \
+            .is_('player_name', 'null') \
+            .execute()
+    rows = res.data or []
+    if not rows:
+        print('    All player_match_stats rows have player_name — nothing to repair')
+        return 0
+
+    player_ids = list({r['player_id'] for r in rows if r.get('player_id')})
+    team_ids   = list({r['team_id']   for r in rows if r.get('team_id')})
+    print(f'    {len(rows)} stat row(s) with NULL player_name — {len(player_ids)} unique player(s)')
+
+    # Build player_id → {name, national_team_name} map from players table
+    player_map: dict = {}
+    for i in range(0, len(player_ids), 100):
+        batch = player_ids[i:i+100]
+        p_res = sb.table('players') \
+                  .select('id, name, short_name, national_team_name') \
+                  .in_('id', batch).execute()
+        for p in (p_res.data or []):
+            player_map[p['id']] = p
+
+    # Build team_id → name map from teams table (fallback for team_name)
+    team_map: dict = {}
+    for i in range(0, len(team_ids), 100):
+        batch = team_ids[i:i+100]
+        t_res = sb.table('teams').select('id, name').in_('id', batch).execute()
+        for t in (t_res.data or []):
+            team_map[t['id']] = t['name']
+
+    fixed = 0
+    for pid in player_ids:
+        player = player_map.get(pid)
+        if not player:
+            print(f'    SKIP player_id={pid}: not found in players table')
+            continue
+        update: dict = {
+            'player_name': player.get('name') or player.get('short_name'),
+        }
+        # team_name: prefer national_team_name from players row
+        nat_name = player.get('national_team_name')
+        if nat_name:
+            update['team_name'] = nat_name
+
+        try:
+            sb.table('player_match_stats') \
+              .update(update) \
+              .eq('player_id', pid) \
+              .is_('player_name', 'null') \
+              .execute()
+            fixed += 1
+        except Exception as e:
+            print(f'    ERR player_id={pid}: {e}')
+        time.sleep(0.02)
+
+    # Second pass: fix team_name=NULL rows where player_name is already set
+    res2 = sb.table('player_match_stats') \
+             .select('player_id, team_id') \
+             .is_('team_name', 'null') \
+             .not_.is_('team_id', 'null') \
+             .execute()
+    team_null_rows = res2.data or []
+    if team_null_rows:
+        team_null_pids = list({r['team_id'] for r in team_null_rows if r.get('team_id')})
+        for i in range(0, len(team_null_pids), 100):
+            batch = team_null_pids[i:i+100]
+            t_res = sb.table('teams').select('id, name').in_('id', batch).execute()
+            for t in (t_res.data or []):
+                team_map[t['id']] = t['name']
+        for row in team_null_rows:
+            tid  = row.get('team_id')
+            name = team_map.get(tid)
+            if not name or not tid:
+                continue
+            try:
+                sb.table('player_match_stats') \
+                  .update({'team_name': name}) \
+                  .eq('player_id', row['player_id']) \
+                  .eq('team_id', tid) \
+                  .is_('team_name', 'null') \
+                  .execute()
+            except Exception as e:
+                print(f'    ERR team_name team_id={tid}: {e}')
+            time.sleep(0.02)
+        print(f'    Fixed team_name for {len(team_null_rows)} stat row(s)')
+
+    print(f'    Repaired player_name for {fixed} player(s)')
+    return fixed
+
+
 # ── Cron mode: query Supabase → process newly finished ───────────────────────
 def run_cron():
     print(f'[{datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}] Cron run started')
@@ -972,10 +1079,13 @@ def run_cron():
     # Step 3: pre-fill referee names for upcoming matches (assigned 2-3 days early)
     prefill_upcoming_referees()
 
-    # Step 4: refresh top scorers + group standings after every run
+    # Step 4: refresh top scorers + group standings when new matches collected
     if collected > 0:
         fetch_top_scorers()
         fetch_standings()
+
+    # Step 5: always repair broken player_name/team_name links
+    repair_player_stats()
 
     print(f'\nCron done. Collected {collected} event(s).')
     return collected
@@ -1050,6 +1160,7 @@ def main():
     parser.add_argument('--fix-refs',        action='store_true', help='Fetch individual referee records for matches with NULL referee_name')
     parser.add_argument('--prefill-refs',    action='store_true', help='Pre-fill referee names for upcoming matches where referee_id is already set')
     parser.add_argument('--fetch-stats',     action='store_true', help='Fetch tournament top scorers + group standings from BSD → Supabase')
+    parser.add_argument('--repair-stats',    action='store_true', help='Backfill NULL player_name/team_name in player_match_stats from players/teams tables')
     parser.add_argument('--verify-coaches',  action='store_true', help='Cross-check coaches table vs managers table')
     parser.add_argument('--schema',          action='store_true', help='Print SQL to run in Supabase dashboard')
     args = parser.parse_args()
@@ -1144,6 +1255,10 @@ def main():
         s = fetch_top_scorers()
         g = fetch_standings()
         print(f'\nDone — {s} top scorer(s), {g} standing row(s) updated.')
+        return
+
+    if args.repair_stats:
+        repair_player_stats()
         return
 
     if args.verify_coaches:

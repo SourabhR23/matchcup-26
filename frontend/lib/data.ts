@@ -624,6 +624,97 @@ export async function getPlayerAllMatchStats(playerId: number): Promise<Record<s
   return data as Record<string, unknown>[]
 }
 
+/* ── Enriched per-match history for a player (stats + match metadata) ── */
+export interface PlayerMatchHistoryRow {
+  event_id: number
+  event_date: string | null
+  home_team: string
+  away_team: string
+  home_score: number | null
+  away_score: number | null
+  group_name: string
+  round_name: string
+  team_id: number | null
+  minutes_played: number | null
+  rating: number | null
+  goals: number
+  goal_assist: number
+  expected_goals: number | null
+  expected_assists: number | null
+  total_shots: number | null
+  shots_on_target: number | null
+  key_pass: number | null
+  total_pass: number | null
+  accurate_pass: number | null
+  won_tackle: number | null
+  total_tackle: number | null
+  interception: number | null
+  duel_won: number | null
+  duel_lost: number | null
+  yellow_card: number | null
+  red_card: number | null
+}
+
+export async function getPlayerMatchHistory(playerId: number): Promise<PlayerMatchHistoryRow[]> {
+  const { data: statRows } = await supabaseServer
+    .from('player_match_stats')
+    .select('*')
+    .eq('player_id', playerId)
+    .order('event_id', { ascending: false })
+
+  if (!statRows || statRows.length === 0) return []
+
+  const eventIds = statRows.map(r => r.event_id as number)
+
+  const { data: matchRows } = await supabaseServer
+    .from('matches')
+    .select('id, event_date, home_team_name, away_team_name, home_score, away_score, group_name, round_name')
+    .in('id', eventIds)
+
+  const matchMap: Record<number, {
+    id: number; event_date: string | null
+    home_team_name: string | null; away_team_name: string | null
+    home_score: number | null; away_score: number | null
+    group_name: string | null; round_name: string | null
+  }> = {}
+  for (const m of matchRows ?? []) matchMap[m.id] = m
+
+  const n = (v: unknown) => (v != null ? Number(v) : null)
+
+  return statRows.map(s => {
+    const m = matchMap[s.event_id as number]
+    return {
+      event_id:         s.event_id as number,
+      event_date:       m?.event_date ?? null,
+      home_team:        m?.home_team_name ?? '',
+      away_team:        m?.away_team_name ?? '',
+      home_score:       m?.home_score ?? null,
+      away_score:       m?.away_score ?? null,
+      group_name:       m?.group_name ?? '',
+      round_name:       m?.round_name ?? '',
+      team_id:          n(s.team_id),
+      minutes_played:   n(s.minutes_played),
+      rating:           n(s.rating),
+      goals:            (s.goals as number) ?? 0,
+      goal_assist:      (s.goal_assist as number) ?? 0,
+      expected_goals:   n(s.expected_goals),
+      expected_assists: n(s.expected_assists),
+      total_shots:      n(s.total_shots),
+      shots_on_target:  n(s.shots_on_target),
+      key_pass:         n(s.key_pass),
+      total_pass:       n(s.total_pass),
+      accurate_pass:    n(s.accurate_pass),
+      won_tackle:       n(s.won_tackle),
+      total_tackle:     n(s.total_tackle),
+      interception:     n(s.interception),
+      duel_won:         n(s.duel_won),
+      duel_lost:        n(s.duel_lost),
+      yellow_card:      n(s.yellow_card),
+      red_card:         n(s.red_card),
+    }
+  })
+}
+
 /* ── BSD team-side stats for a list of event IDs ── */
 export async function getTeamMatchBsdStats(
   eventIds: number[]

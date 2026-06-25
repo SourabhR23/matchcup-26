@@ -11,7 +11,7 @@ const CH     = 80    // card height px (2 team rows + date)
 const SLOT   = 108   // px per R32 slot (CH + spacing)
 const HGAP   = 56    // horizontal gap between columns (connector space)
 const COL    = CW + HGAP
-const HDR    = 34    // round header bar height
+const HDR    = 44    // round header bar height
 
 /* ─── Round metadata ─── */
 const MAIN_ROUNDS = ['Round of 32', 'Round of 16', 'Quarter-Final', 'Semi-Final', 'Final']
@@ -23,7 +23,19 @@ const SHORT: Record<string, string> = {
   'Quarter-Final': 'QF',
   'Semi-Final':    'SF',
   'Final':         'FINAL',
-  '3rd Place':     '3RD PLACE',
+  '3rd Place':     '3RD',
+}
+
+/* Normalise DB round_name variants → canonical form used in MAIN_ROUNDS */
+function normalizeRound(name: string): string {
+  const n = name.toLowerCase().trim()
+  if (n.includes('32'))                                          return 'Round of 32'
+  if (n.includes('16'))                                         return 'Round of 16'
+  if (n.includes('quarter'))                                    return 'Quarter-Final'
+  if (n.includes('semi'))                                       return 'Semi-Final'
+  if (n.includes('3rd') || n.includes('third') || n.includes('bronze') || n.includes('place')) return '3rd Place'
+  if (n.includes('final'))                                      return 'Final'
+  return name
 }
 
 /* y-center of match mIdx within round rIdx, relative to bracket content area */
@@ -121,7 +133,7 @@ function Desktop({ byRound }: { byRound: Record<string, MatchEvent[]> }) {
           }}>
             <div style={{
               fontFamily: 'var(--font-bebas,sans-serif)',
-              color: 'var(--color-accent)', fontSize: 13, letterSpacing: 2,
+              color: 'var(--color-accent)', fontSize: 18, letterSpacing: 3,
             }}>{SHORT[rName]}</div>
           </div>
         ))}
@@ -296,7 +308,7 @@ export default function KnockoutBracket({ matches }: { matches: MatchEvent[] }) 
   /* Group by round, sort each round by date (preserves bracket order) */
   const byRound: Record<string, MatchEvent[]> = {}
   for (const m of matches) {
-    const r = m.round_name || 'Unknown'
+    const r = normalizeRound(m.round_name || 'Unknown')
     if (!byRound[r]) byRound[r] = []
     byRound[r].push(m)
   }
