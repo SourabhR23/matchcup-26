@@ -3,10 +3,11 @@ import { notFound } from 'next/navigation'
 import {
   getTeam, getRoster, getEvents, getGroupStandings,
   getTeamPlayerStats, getVenueById, getTeamCoach, getTeamMatchBsdStats,
+  getTeamForm,
 } from '@/lib/data'
 import TeamDesignTabs, {
   type TeamDesignProps, type TeamResult, type RosterPlayer,
-  type StatLeader, type MatchStatRow, type UpcomingMatch,
+  type StatLeader, type MatchStatRow, type UpcomingMatch, type TeamFormRow,
 } from '@/components/TeamDesignTabs'
 
 export const dynamic = 'force-dynamic'
@@ -35,11 +36,12 @@ export default async function TeamPage({ params }: Params) {
   const team = await getTeam(teamId)
   if (!team) return notFound()
 
-  const [roster, events, standings, coachDetail] = await Promise.all([
+  const [roster, events, standings, coachDetail, teamFormData] = await Promise.all([
     getRoster(teamId),
     getEvents(),
     getGroupStandings(),
     getTeamCoach(teamId),
+    getTeamForm(teamId, 10),
   ])
 
   /* ── Team's events ── */
@@ -196,6 +198,27 @@ export default async function TeamPage({ params }: Params) {
       }
     })
 
+  const teamForm: TeamFormRow[] = teamFormData.map(r => ({
+    id:            r.id,
+    opponent:      r.opponent,
+    opponentId:    r.opponentId,
+    competition:   r.competition,
+    isHome:        r.isHome,
+    eventDate:     r.eventDate,
+    result:        r.result,
+    teamScore:     r.teamScore,
+    opponentScore: r.opponentScore,
+    possession:    r.possession,
+    shots:         r.shots,
+    shotsOn:       r.shotsOn,
+    xg:            r.xg,
+    corners:       r.corners,
+    yellowCards:   r.yellowCards,
+    redCards:      r.redCards,
+    passAccuracy:  r.passAccuracy,
+    bigChances:    r.bigChances,
+  }))
+
   const props: TeamDesignProps = {
     teamId, teamName: team.name, group, groupRank,
     coachName, coachCountry, venueInfo,
@@ -204,7 +227,7 @@ export default async function TeamPage({ params }: Params) {
       : null,
     roster: rosterForClient, teamResults, statLeaders,
     homeKitColor, awayKitColor,
-    matchStatRows, upcomingMatches,
+    matchStatRows, upcomingMatches, teamForm,
   }
 
   return (

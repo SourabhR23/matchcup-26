@@ -790,6 +790,58 @@ export async function getTeamPlayerStats(eventIds: number[]): Promise<Record<str
   return data as Record<string, unknown>[]
 }
 
+/* ── Team form: recent match history across all competitions ── */
+export interface TeamFormRow {
+  id:             number        // event_id
+  opponent:       string
+  opponentId:     number | null
+  competition:    string
+  isHome:         boolean
+  eventDate:      string
+  result:         string | null // 'W' | 'D' | 'L' | null (upcoming)
+  teamScore:      number | null
+  opponentScore:  number | null
+  possession:     number | null
+  shots:          number | null
+  shotsOn:        number | null
+  xg:             number | null
+  corners:        number | null
+  yellowCards:    number | null
+  redCards:       number | null
+  passAccuracy:   number | null
+  bigChances:     number | null
+}
+
+export async function getTeamForm(teamId: number, limit = 10): Promise<TeamFormRow[]> {
+  const { data, error } = await supabaseServer
+    .from('team_form')
+    .select('event_id, opponent_name, opponent_id, competition, is_home, event_date, result, team_score, opponent_score, possession, shots, shots_on_target, xg, corners, yellow_cards, red_cards, pass_accuracy, big_chances')
+    .eq('team_id', teamId)
+    .order('event_date', { ascending: false })
+    .limit(limit)
+  if (error || !data) return []
+  return data.map(r => ({
+    id:            r.event_id,
+    opponent:      r.opponent_name ?? '',
+    opponentId:    r.opponent_id   ?? null,
+    competition:   r.competition   ?? '',
+    isHome:        r.is_home,
+    eventDate:     r.event_date,
+    result:        r.result        ?? null,
+    teamScore:     r.team_score    ?? null,
+    opponentScore: r.opponent_score ?? null,
+    possession:    r.possession    ?? null,
+    shots:         r.shots         ?? null,
+    shotsOn:       r.shots_on_target ?? null,
+    xg:            r.xg            ?? null,
+    corners:       r.corners       ?? null,
+    yellowCards:   r.yellow_cards  ?? null,
+    redCards:      r.red_cards     ?? null,
+    passAccuracy:  r.pass_accuracy ?? null,
+    bigChances:    r.big_chances   ?? null,
+  }))
+}
+
 /* ── Stats constants ── */
 export const TOTAL_NATIONS = 48
 export const TOTAL_GROUPS  = 12

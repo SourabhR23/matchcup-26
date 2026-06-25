@@ -6,12 +6,12 @@ import FlagImg from './FlagImg'
 import type { MatchEvent } from '@/lib/types'
 
 /* ─── Layout constants ─── */
-const CW     = 196   // card width px
-const CH     = 80    // card height px (2 team rows + date)
-const SLOT   = 108   // px per R32 slot (CH + spacing)
-const HGAP   = 56    // horizontal gap between columns (connector space)
-const COL    = CW + HGAP
-const HDR    = 44    // round header bar height
+const CW   = 196
+const CH   = 80
+const SLOT = 108
+const HGAP = 56
+const COL  = CW + HGAP
+const HDR  = 44
 
 /* ─── Round metadata ─── */
 const MAIN_ROUNDS = ['Round of 32', 'Round of 16', 'Quarter-Final', 'Semi-Final', 'Final']
@@ -26,19 +26,17 @@ const SHORT: Record<string, string> = {
   '3rd Place':     '3RD',
 }
 
-/* Normalise DB round_name variants → canonical form used in MAIN_ROUNDS */
 function normalizeRound(name: string): string {
   const n = name.toLowerCase().trim()
-  if (n.includes('32'))                                          return 'Round of 32'
-  if (n.includes('16'))                                         return 'Round of 16'
-  if (n.includes('quarter'))                                    return 'Quarter-Final'
-  if (n.includes('semi'))                                       return 'Semi-Final'
+  if (n.includes('32'))                                                               return 'Round of 32'
+  if (n.includes('16'))                                                               return 'Round of 16'
+  if (n.includes('quarter'))                                                          return 'Quarter-Final'
+  if (n.includes('semi'))                                                             return 'Semi-Final'
   if (n.includes('3rd') || n.includes('third') || n.includes('bronze') || n.includes('place')) return '3rd Place'
-  if (n.includes('final'))                                      return 'Final'
+  if (n.includes('final'))                                                            return 'Final'
   return name
 }
 
-/* y-center of match mIdx within round rIdx, relative to bracket content area */
 function yc(rIdx: number, mIdx: number): number {
   if (rIdx === 0) return (mIdx + 0.5) * SLOT
   const span = Math.pow(2, rIdx)
@@ -49,13 +47,16 @@ function fmt(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
-/* ─── Shared match card ─── */
+function fmtFull(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+/* ─── Compact bracket card (used in SVG bracket) ─── */
 function Card({ m, w }: { m: MatchEvent; w?: number }) {
   const done = m.status === 'finished'
   const live = m.status === 'live' || m.status === 'inprogress'
   const hWon = done && m.home_score !== null && m.away_score !== null && m.home_score > m.away_score
   const aWon = done && m.home_score !== null && m.away_score !== null && m.away_score > m.home_score
-
   const sides = [
     { name: m.home_team, score: m.home_score, won: hWon },
     { name: m.away_team, score: m.away_score, won: aWon },
@@ -65,13 +66,10 @@ function Card({ m, w }: { m: MatchEvent; w?: number }) {
     <Link
       href={done || live ? `/matches/${m.id}` : '#'}
       style={{
-        display: 'block',
-        width: w,
+        display: 'block', width: w,
         background: 'var(--color-surface)',
         border: live ? '1px solid var(--color-accent)' : '0.5px solid #d8d4cc',
-        textDecoration: 'none',
-        color: 'var(--color-ink)',
-        position: 'relative',
+        textDecoration: 'none', color: 'var(--color-ink)', position: 'relative',
       }}
     >
       {live && (
@@ -80,7 +78,6 @@ function Card({ m, w }: { m: MatchEvent; w?: number }) {
           color: 'var(--color-accent)', fontFamily: 'var(--font-bebas,sans-serif)', letterSpacing: 1,
         }}>LIVE</span>
       )}
-
       {sides.map((s, i) => (
         <div key={i} style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -98,14 +95,12 @@ function Card({ m, w }: { m: MatchEvent; w?: number }) {
           </div>
           {s.score !== null && (
             <span style={{
-              fontSize: 12, fontWeight: 700, minWidth: 16,
-              textAlign: 'right', marginLeft: 8,
+              fontSize: 12, fontWeight: 700, minWidth: 16, textAlign: 'right', marginLeft: 8,
               opacity: done && !s.won ? 0.4 : 1,
             }}>{s.score}</span>
           )}
         </div>
       ))}
-
       <div style={{ padding: '2px 8px 5px', fontSize: 9, color: '#aaa', letterSpacing: 0.5 }}>
         {fmt(m.event_date)}
       </div>
@@ -113,30 +108,208 @@ function Card({ m, w }: { m: MatchEvent; w?: number }) {
   )
 }
 
-/* ─── Desktop: SVG bracket with connectors ─── */
+/* ─── Detailed match card (used in round focus view) ─── */
+function DetailCard({ m }: { m: MatchEvent }) {
+  const done = m.status === 'finished'
+  const live = m.status === 'live' || m.status === 'inprogress'
+  const hWon = done && m.home_score !== null && m.away_score !== null && m.home_score > m.away_score
+  const aWon = done && m.home_score !== null && m.away_score !== null && m.away_score > m.home_score
+
+  const statusBadge = live
+    ? { label: 'LIVE', bg: 'var(--color-accent)', color: '#fff' }
+    : done
+    ? { label: 'FT',   bg: '#111',                 color: 'var(--color-accent)' }
+    : { label: fmt(m.event_date), bg: '#f0ece4', color: '#666' }
+
+  return (
+    <Link
+      href={done || live ? `/matches/${m.id}` : '#'}
+      style={{
+        display: 'block', textDecoration: 'none', color: 'var(--color-ink)',
+        background: 'var(--color-surface)',
+        border: live ? '1px solid var(--color-accent)' : '0.5px solid #d8d4cc',
+        transition: 'border-color 0.15s',
+      }}
+    >
+      {/* Status bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '5px 12px',
+        borderBottom: '0.5px solid #ede9e0',
+        background: '#faf8f4',
+      }}>
+        <span style={{
+          fontSize: 9, color: '#aaa', letterSpacing: 0.5,
+        }}>{fmtFull(m.event_date)}</span>
+        <span style={{
+          fontSize: 9, fontFamily: 'var(--font-bebas,sans-serif)', letterSpacing: 1,
+          padding: '1px 6px',
+          background: statusBadge.bg, color: statusBadge.color,
+        }}>{statusBadge.label}</span>
+      </div>
+
+      {/* Teams */}
+      {[
+        { name: m.home_team, score: m.home_score, won: hWon, lost: done && !hWon },
+        { name: m.away_team, score: m.away_score, won: aWon, lost: done && !aWon },
+      ].map((s, i) => (
+        <div key={i} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '9px 12px',
+          borderBottom: i === 0 ? '0.5px solid #ede9e0' : undefined,
+          background: s.won ? '#f5f3ee' : undefined,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', flex: 1 }}>
+            <FlagImg country={s.name} width={22} />
+            <span style={{
+              fontSize: 14, fontWeight: s.won ? 700 : 500,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              opacity: s.lost ? 0.4 : 1,
+            }}>{s.name || '—'}</span>
+          </div>
+          {s.score !== null && (
+            <span style={{
+              fontSize: 22, fontFamily: 'var(--font-bebas,sans-serif)',
+              fontWeight: 700, minWidth: 24, textAlign: 'right', marginLeft: 12,
+              opacity: s.lost ? 0.4 : 1,
+              color: s.won ? 'var(--color-ink)' : undefined,
+            }}>{s.score}</span>
+          )}
+        </div>
+      ))}
+
+      {/* Venue */}
+      {m.venue && (
+        <div style={{
+          padding: '5px 12px', fontSize: 9, color: '#aaa',
+          letterSpacing: 0.5, borderTop: '0.5px solid #f0ece4',
+        }}>
+          {m.venue.name}{m.venue.city ? ` · ${m.venue.city}` : ''}
+        </div>
+      )}
+    </Link>
+  )
+}
+
+/* ─── Round detail view (replaces bracket on click) ─── */
+function RoundDetail({
+  roundName,
+  matches,
+  onBack,
+}: {
+  roundName: string
+  matches: MatchEvent[]
+  onBack: () => void
+}) {
+  const played   = matches.filter(m => m.status === 'finished').length
+  const upcoming = matches.filter(m => m.status !== 'finished' && m.status !== 'live' && m.status !== 'inprogress').length
+  const live     = matches.filter(m => m.status === 'live' || m.status === 'inprogress').length
+
+  return (
+    <div>
+      {/* Header row */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 16,
+        marginBottom: 20, paddingBottom: 16,
+        borderBottom: '0.5px solid #d8d4cc',
+      }}>
+        <button
+          onClick={onBack}
+          style={{
+            background: 'none', border: '0.5px solid #d8d4cc',
+            padding: '7px 14px', cursor: 'pointer',
+            fontFamily: 'var(--font-bebas,sans-serif)', fontSize: 14,
+            letterSpacing: 1, color: '#666',
+            display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+          }}
+        >
+          ← BRACKET
+        </button>
+
+        <div>
+          <div style={{
+            fontFamily: 'var(--font-bebas,sans-serif)',
+            fontSize: 26, letterSpacing: 3, lineHeight: 1,
+          }}>{roundName.toUpperCase()}</div>
+          <div style={{ fontSize: 10, color: '#999', letterSpacing: 0.5, marginTop: 2 }}>
+            {matches.length} MATCHES
+            {played > 0 && <span style={{ marginLeft: 8, color: '#555' }}>{played} PLAYED</span>}
+            {live > 0 && <span style={{ marginLeft: 8, color: 'var(--color-accent)' }}>{live} LIVE</span>}
+            {upcoming > 0 && <span style={{ marginLeft: 8 }}>{upcoming} UPCOMING</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Match grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+        gap: 12,
+      }}>
+        {matches.map(m => <DetailCard key={m.id} m={m} />)}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Desktop: SVG bracket + focus mode ─── */
 function Desktop({ byRound }: { byRound: Record<string, MatchEvent[]> }) {
+  const [focusedRound, setFocusedRound] = useState<string | null>(null)
+
   const r32Count = Math.max(byRound['Round of 32']?.length ?? 0, 16)
   const bH       = r32Count * SLOT
   const bW       = MAIN_ROUNDS.length * COL - HGAP
   const third    = byRound['3rd Place'] ?? []
   const totalH   = HDR + bH + (third.length ? CH + 48 : 0)
 
+  /* ── Focused round view ── */
+  if (focusedRound) {
+    const matches = byRound[focusedRound] ?? []
+    return (
+      <RoundDetail
+        roundName={focusedRound}
+        matches={matches}
+        onBack={() => setFocusedRound(null)}
+      />
+    )
+  }
+
+  /* ── Full bracket view ── */
   return (
     <div style={{ overflowX: 'auto' }}>
       <div style={{ position: 'relative', width: bW, height: totalH, minWidth: bW }}>
 
-        {/* Round header bars */}
-        {MAIN_ROUNDS.map((rName, rIdx) => (
-          <div key={rName} style={{
-            position: 'absolute', top: 0, left: rIdx * COL, width: CW,
-            background: '#111', textAlign: 'center', padding: '7px 0',
-          }}>
-            <div style={{
-              fontFamily: 'var(--font-bebas,sans-serif)',
-              color: 'var(--color-accent)', fontSize: 18, letterSpacing: 3,
-            }}>{SHORT[rName]}</div>
-          </div>
-        ))}
+        {/* Clickable round header bars */}
+        {MAIN_ROUNDS.map((rName, rIdx) => {
+          const hasMatches = (byRound[rName]?.length ?? 0) > 0
+          return (
+            <button
+              key={rName}
+              onClick={() => hasMatches && setFocusedRound(rName)}
+              title={hasMatches ? `View all ${rName} matches` : undefined}
+              style={{
+                position: 'absolute', top: 0, left: rIdx * COL, width: CW,
+                background: '#111', textAlign: 'center', padding: '0',
+                border: 'none', cursor: hasMatches ? 'pointer' : 'default',
+                height: HDR,
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: 1,
+              }}
+            >
+              <span style={{
+                fontFamily: 'var(--font-bebas,sans-serif)',
+                color: 'var(--color-accent)', fontSize: 18, letterSpacing: 3,
+                lineHeight: 1,
+              }}>{SHORT[rName]}</span>
+              {hasMatches && (
+                <span style={{
+                  fontSize: 7, color: '#555', letterSpacing: 1,
+                  fontFamily: 'var(--font-bebas,sans-serif)',
+                }}>VIEW ▸</span>
+              )}
+            </button>
+          )
+        })}
 
         {/* SVG connector lines */}
         <svg
@@ -145,22 +318,17 @@ function Desktop({ byRound }: { byRound: Record<string, MatchEvent[]> }) {
         >
           {MAIN_ROUNDS.slice(0, -1).map((rName, rIdx) => {
             const nextRound = MAIN_ROUNDS[rIdx + 1]
-            const thisM  = byRound[rName]  ?? []
-            const nextM  = byRound[nextRound] ?? []
-            const colX   = rIdx * COL
-            const midX   = colX + CW + HGAP / 2
-            const nextX  = (rIdx + 1) * COL
+            const thisM = byRound[rName]  ?? []
+            const nextM = byRound[nextRound] ?? []
+            const colX  = rIdx * COL
+            const midX  = colX + CW + HGAP / 2
+            const nextX = (rIdx + 1) * COL
             const stroke = '#d8d4cc'
 
             return nextM.map((_, pIdx) => {
-              const c1Idx = pIdx * 2
-              const c2Idx = pIdx * 2 + 1
-              const c1Y = yc(rIdx, c1Idx)
-              const c2Y = yc(rIdx, c2Idx)
-              const pY  = yc(rIdx + 1, pIdx)
-              const hasC1 = !!thisM[c1Idx]
-              const hasC2 = !!thisM[c2Idx]
-
+              const c1Idx = pIdx * 2, c2Idx = pIdx * 2 + 1
+              const c1Y = yc(rIdx, c1Idx), c2Y = yc(rIdx, c2Idx), pY = yc(rIdx + 1, pIdx)
+              const hasC1 = !!thisM[c1Idx], hasC2 = !!thisM[c2Idx]
               return (
                 <g key={`${rIdx}-${pIdx}`}>
                   {hasC1 && <line x1={colX + CW} y1={c1Y} x2={midX} y2={c1Y} stroke={stroke} strokeWidth={0.8} />}
@@ -187,13 +355,10 @@ function Desktop({ byRound }: { byRound: Record<string, MatchEvent[]> }) {
           ))
         )}
 
-        {/* 3rd place — below bracket, aligned to Final column */}
+        {/* 3rd place — below bracket, Final column */}
         {third.map(m => (
           <div key={m.id} style={{
-            position: 'absolute',
-            left: 4 * COL,
-            top: HDR + bH + 16,
-            width: CW,
+            position: 'absolute', left: 4 * COL, top: HDR + bH + 16, width: CW,
           }}>
             <div style={{
               fontSize: 9, color: '#888', letterSpacing: 1, marginBottom: 4,
@@ -218,36 +383,32 @@ function Mobile({ byRound }: { byRound: Record<string, MatchEvent[]> }) {
 
   return (
     <div>
-      {/* Prev / round label / Next */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <button
           onClick={() => setIdx(i => Math.max(0, i - 1))}
           disabled={idx === 0}
           style={{
-            padding: '6px 14px', background: 'none',
-            border: '0.5px solid #d8d4cc', cursor: idx === 0 ? 'default' : 'pointer',
+            padding: '6px 14px', background: 'none', border: '0.5px solid #d8d4cc',
+            cursor: idx === 0 ? 'default' : 'pointer',
             fontFamily: 'var(--font-bebas,sans-serif)', fontSize: 20,
             color: idx === 0 ? '#ccc' : 'var(--color-ink)', flexShrink: 0,
           }}
         >‹</button>
 
         <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{
-            fontFamily: 'var(--font-bebas,sans-serif)', fontSize: 22, letterSpacing: 2,
-          }}>{SHORT[active] ?? active.toUpperCase()}</div>
-          {SHORT[active] !== active.toUpperCase() && (
-            <div style={{ fontSize: 9, color: '#999', letterSpacing: 1, marginTop: -2 }}>
-              {active.toUpperCase()}
-            </div>
-          )}
+          <div style={{ fontFamily: 'var(--font-bebas,sans-serif)', fontSize: 22, letterSpacing: 2 }}>
+            {SHORT[active] ?? active.toUpperCase()}
+          </div>
+          <div style={{ fontSize: 9, color: '#999', letterSpacing: 1, marginTop: -2 }}>
+            {active.toUpperCase()}
+          </div>
         </div>
 
         <button
           onClick={() => setIdx(i => Math.min(rounds.length - 1, i + 1))}
           disabled={idx === rounds.length - 1}
           style={{
-            padding: '6px 14px', background: 'none',
-            border: '0.5px solid #d8d4cc',
+            padding: '6px 14px', background: 'none', border: '0.5px solid #d8d4cc',
             cursor: idx === rounds.length - 1 ? 'default' : 'pointer',
             fontFamily: 'var(--font-bebas,sans-serif)', fontSize: 20,
             color: idx === rounds.length - 1 ? '#ccc' : 'var(--color-ink)', flexShrink: 0,
@@ -255,30 +416,24 @@ function Mobile({ byRound }: { byRound: Record<string, MatchEvent[]> }) {
         >›</button>
       </div>
 
-      {/* Progress dots */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginBottom: 16 }}>
         {rounds.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => setIdx(i)}
-            style={{
-              width: i === idx ? 20 : 6, height: 6, borderRadius: 3,
-              border: 'none', padding: 0, cursor: 'pointer',
-              background: i === idx ? 'var(--color-accent)' : '#d8d4cc',
-              transition: 'width 0.2s',
-            }}
-          />
+          <button key={i} onClick={() => setIdx(i)} style={{
+            width: i === idx ? 20 : 6, height: 6, borderRadius: 3,
+            border: 'none', padding: 0, cursor: 'pointer',
+            background: i === idx ? 'var(--color-accent)' : '#d8d4cc',
+            transition: 'width 0.2s',
+          }} />
         ))}
       </div>
 
-      {/* Match list for selected round */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {matches.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 32, color: '#999', fontSize: 11 }}>
             Matches will appear here once confirmed.
           </div>
         ) : (
-          matches.map(m => <Card key={m.id} m={m} />)
+          matches.map(m => <DetailCard key={m.id} m={m} />)
         )}
       </div>
     </div>
@@ -305,7 +460,6 @@ export default function KnockoutBracket({ matches }: { matches: MatchEvent[] }) 
     )
   }
 
-  /* Group by round, sort each round by date (preserves bracket order) */
   const byRound: Record<string, MatchEvent[]> = {}
   for (const m of matches) {
     const r = normalizeRound(m.round_name || 'Unknown')
@@ -318,11 +472,9 @@ export default function KnockoutBracket({ matches }: { matches: MatchEvent[] }) 
 
   return (
     <>
-      {/* Desktop: full SVG bracket — hidden below md */}
       <div className="hidden md:block">
         <Desktop byRound={byRound} />
       </div>
-      {/* Mobile: round navigator — hidden above md */}
       <div className="md:hidden">
         <Mobile byRound={byRound} />
       </div>

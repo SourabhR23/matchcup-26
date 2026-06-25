@@ -39,6 +39,33 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 FINISHED = {'finished', 'ft', 'ended', 'complete', 'awarded'}
 
+# BSD league_id + season_id → human-readable competition name
+COMPETITION_MAP: dict = {
+    (27, 188): 'World Cup 2026',
+    (27, 189): 'World Cup 2022',
+    (27, 381): 'World Cup 2014',
+    (27, 382): 'World Cup 2018',
+    (31, None): 'Friendly',
+    (65, None): 'Nations League',
+    (67, None): 'Gold Cup 2024',
+    (69, None): 'Gold Cup 2025',
+}
+
+def get_competition_name(league_id, season_id):
+    if league_id is None:
+        return 'Unknown'
+    key = (league_id, season_id)
+    if key in COMPETITION_MAP:
+        return COMPETITION_MAP[key]
+    league_key = (league_id, None)
+    if league_key in COMPETITION_MAP:
+        return COMPETITION_MAP[league_key]
+    if league_id == 27:
+        return 'World Cup'
+    if league_id == 31:
+        return 'Friendly'
+    return f'League {league_id}'
+
 # ── Supabase ──────────────────────────────────────────────────────────────────
 _pid         = os.getenv('project_id', '').strip()
 SUPABASE_URL = os.getenv('NEXT_PUBLIC_SUPABASE_URL') or (f'https://{_pid}.supabase.co' if _pid else '')
@@ -458,6 +485,186 @@ def verify_coaches():
         print('    coaches table is a clean subset of managers — safe to ignore')
 
 
+# ── team_form helpers ─────────────────────────────────────────────────────────
+def _extract_side_stats(side: dict, team_score, opp_score, is_finished: bool) -> dict:
+    """Pull display stats from one side of a BSD stats response."""
+    xg_raw = side.get('xg') or {}
+    xg = nf(xg_raw.get('actual') if isinstance(xg_raw, dict) else xg_raw) or nf(side.get('expected_goals'))
+    result = None
+    if is_finished and team_score is not None and opp_score is not None:
+        result = 'W' if team_score > opp_score else ('L' if team_score < opp_score else 'D')
+    return {
+        'result':          result,
+        'possession':      ni(side.get('ball_possession')),
+        'shots':           ni(side.get('total_shots')),
+        'shots_on_target': ni(side.get('shots_on_target')),
+        'xg':              xg,
+        'corners':         ni(side.get('corner_kicks')),
+        'yellow_cards':    ni(side.get('yellow_cards')),
+        'red_cards':       ni(side.get('red_cards')),
+        'pass_accuracy':   nf(side.get('pass_accuracy_pct')),
+        'big_chances':     ni(side.get('big_chances')),
+    }
+
+
+def upsert_team_form_for_event(detail: dict, inner: dict):
+    """Build and upsert two team_form rows (home + away) for a match."""
+    event_id = ni(detail.get('id'))
+    if not event_id:
+        return
+    league_id   = ni(detail.get('league_id'))
+    season_id   = ni(detail.get('season_id'))
+    home_id     = ni(detail.get('home_team_id'))
+    away_id     = ni(detail.get('away_team_id'))
+    home_score  = ni(detail.get('home_score'))
+    away_score  = ni(detail.get('away_score'))
+    event_date  = detail.get('event_date')
+    competition = get_competition_name(league_id, season_id)
+    status      = (detail.get('status') or '').lower()
+    is_finished = status in FINISHED
+
+    home_stats = inner.get('home') or {}
+    away_stats = inner.get('away') or {}
+
+    rows = []
+    if home_id:
+        rows.append({
+            'team_id':        home_id,
+            'event_id':       event_id,
+            'opponent_id':    away_id,
+            'opponent_name':  nv(detail.get('away_team')) or '',
+            'competition':    competition,
+            'league_id':      league_id,
+            'season_id':      season_id,
+            'event_date':     event_date,
+            'is_home':        True,
+            'team_score':     home_score,
+            'opponent_score': away_score,
+            **_extract_side_stats(home_stats, home_score, away_score, is_finished),
+        })
+    if away_id:
+        rows.append({
+            'team_id':        away_id,
+            'event_id':       event_id,
+            'opponent_id':    home_id,
+            'opponent_name':  nv(detail.get('home_team')) or '',
+            'competition':    competition,
+            'league_id':      league_id,
+            'season_id':      season_id,
+            'event_date':     event_date,
+            'is_home':        False,
+            'team_score':     away_score,
+            'opponent_score': home_score,
+            **_extract_side_stats(away_stats, away_score, home_score, is_finished),
+        })
+    if rows:
+        upsert('team_form', rows, 'team_id,event_id', label=f'(event {event_id})')
+
+
+def populate_team_form():
+    """
+    For every team in the DB, fetch their recent match history from BSD
+    (/api/v2/events/?team_id=X) and upsert into team_form.
+    Run once with --populate-form; WC 2026 rows auto-update via collect_event.
+    """
+    print('\n  populate_team_form …')
+    teams_res = sb.table('teams').select('id,name').execute()
+    all_teams = teams_res.data or []
+    print(f'  {len(all_teams)} teams in DB')
+
+    total = 0
+    for team in all_teams:
+        team_id   = team['id']
+        team_name = team['name']
+        print(f'\n  [{team_id}] {team_name} …')
+
+        data = get(f'/api/v2/events/?team_id={team_id}')
+        if not data:
+            print(f'    SKIP: no data from BSD'); continue
+
+        matches = data.get('results', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        if not matches:
+            print(f'    no matches'); continue
+
+        # Sort newest-first, process latest 25 (10 finished + buffer for upcoming + WC history)
+        matches_sorted = sorted(
+            [m for m in matches if m.get('event_date')],
+            key=lambda x: x['event_date'],
+            reverse=True
+        )
+        recent = matches_sorted[:25]
+        print(f'    {len(recent)} matches to process')
+
+        rows = []
+        for match in recent:
+            event_id = ni(match.get('id'))
+            if not event_id:
+                continue
+            league_id  = ni(match.get('league_id'))
+            season_id  = ni(match.get('season_id'))
+            home_id    = ni(match.get('home_team_id'))
+            away_id    = ni(match.get('away_team_id'))
+            home_score = ni(match.get('home_score'))
+            away_score = ni(match.get('away_score'))
+            status     = (match.get('status') or '').lower()
+            is_fin     = status in FINISHED
+            is_home    = (home_id == team_id)
+            team_score = home_score if is_home else away_score
+            opp_score  = away_score if is_home else home_score
+            competition = get_competition_name(league_id, season_id)
+
+            row: dict = {
+                'team_id':        team_id,
+                'event_id':       event_id,
+                'opponent_id':    away_id if is_home else home_id,
+                'opponent_name':  nv(match.get('away_team') if is_home else match.get('home_team')) or '',
+                'competition':    competition,
+                'league_id':      league_id,
+                'season_id':      season_id,
+                'event_date':     match.get('event_date'),
+                'is_home':        is_home,
+                'team_score':     team_score,
+                'opponent_score': opp_score,
+                'result':         None,
+            }
+
+            if is_fin and team_score is not None and opp_score is not None:
+                row['result'] = 'W' if team_score > opp_score else ('L' if team_score < opp_score else 'D')
+
+            if is_fin:
+                time.sleep(DELAY)
+                stats_raw = get(f'/api/v2/events/{event_id}/stats/') or {}
+                inner = stats_raw.get('stats') or {}
+                if isinstance(inner.get('stats'), dict):
+                    inner = inner['stats']
+                side = inner.get('home' if is_home else 'away') or {}
+                xg_raw = side.get('xg') or {}
+                xg = nf(xg_raw.get('actual') if isinstance(xg_raw, dict) else xg_raw) or nf(side.get('expected_goals'))
+                row.update({
+                    'possession':      ni(side.get('ball_possession')),
+                    'shots':           ni(side.get('total_shots')),
+                    'shots_on_target': ni(side.get('shots_on_target')),
+                    'xg':              xg,
+                    'corners':         ni(side.get('corner_kicks')),
+                    'yellow_cards':    ni(side.get('yellow_cards')),
+                    'red_cards':       ni(side.get('red_cards')),
+                    'pass_accuracy':   nf(side.get('pass_accuracy_pct')),
+                    'big_chances':     ni(side.get('big_chances')),
+                })
+
+            rows.append(row)
+
+        if rows:
+            # Upsert in batches of 50
+            for i in range(0, len(rows), 50):
+                upsert('team_form', rows[i:i+50], 'team_id,event_id', label=f'({team_name}: rows {i+1}-{i+len(rows[i:i+50])})')
+        total += len(rows)
+        time.sleep(DELAY)
+
+    print(f'\n  populate_team_form done — {total} rows upserted across {len(all_teams)} teams')
+    return total
+
+
 # ── Supabase upsert helper ────────────────────────────────────────────────────
 def upsert(table: str, rows: list, on_conflict: str, label: str = ''):
     if not rows:
@@ -760,7 +967,12 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
         print(f'    SKIP match_bsd_stats (no data)')
     time.sleep(DELAY)
 
-    # ── 4. incidents (save locally; push to Supabase if table exists) ──
+    # ── 4a. team_form — upsert two rows (home + away) for this event ──
+    detail['league_id'] = 27  # collect_event always handles WC 2026 events
+    detail['season_id'] = 188
+    upsert_team_form_for_event(detail, inner)
+
+    # ── 5. incidents (save locally; push to Supabase if table exists) ──
     print(f'    fetching incidents …')
     inc_raw  = get(f'/api/v2/events/{event_id}/incidents/') or {}
     inc_list = inc_raw if isinstance(inc_raw, list) else inc_raw.get('incidents', [])
@@ -771,7 +983,7 @@ def collect_event(event_id: int, force: bool = False, save_local: bool = True) -
             json.dumps(inc_raw, ensure_ascii=False, indent=2), encoding='utf-8')
     time.sleep(DELAY)
 
-    # ── 5. lineups (save locally; push to Supabase if table exists) ──
+    # ── 6. lineups (save locally; push to Supabase if table exists) ──
     print(f'    fetching lineups …')
     lineups_raw = get(f'/api/v2/events/{event_id}/lineups/') or {}
     if save_local and lineups_raw:
@@ -1162,6 +1374,7 @@ def main():
     parser.add_argument('--fetch-stats',     action='store_true', help='Fetch tournament top scorers + group standings from BSD → Supabase')
     parser.add_argument('--repair-stats',    action='store_true', help='Backfill NULL player_name/team_name in player_match_stats from players/teams tables')
     parser.add_argument('--verify-coaches',  action='store_true', help='Cross-check coaches table vs managers table')
+    parser.add_argument('--populate-form',   action='store_true', help='Fetch recent match history for all teams from BSD → team_form table')
     parser.add_argument('--schema',          action='store_true', help='Print SQL to run in Supabase dashboard')
     args = parser.parse_args()
 
@@ -1180,8 +1393,40 @@ def main():
         print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS h2h_data JSONB;")
         print("ALTER TABLE matches ADD COLUMN IF NOT EXISTS highlights JSONB;")
         print()
-        print("ALTER TABLE matches ADD CONSTRAINT IF NOT EXISTS fk_matches_venue")
+        print("ALTER TABLE matches DROP CONSTRAINT IF EXISTS fk_matches_venue;")
+        print("ALTER TABLE matches ADD CONSTRAINT fk_matches_venue")
         print("  FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE SET NULL;")
+        print()
+        print("NOTIFY pgrst, 'reload schema';")
+        print()
+        print("-- team_form table (recent match history per team, all competitions)")
+        print("CREATE TABLE IF NOT EXISTS team_form (")
+        print("  id              SERIAL PRIMARY KEY,")
+        print("  team_id         INTEGER NOT NULL REFERENCES teams(id),")
+        print("  event_id        INTEGER NOT NULL,")
+        print("  opponent_id     INTEGER,")
+        print("  opponent_name   TEXT NOT NULL DEFAULT '',")
+        print("  competition     TEXT,")
+        print("  league_id       INTEGER,")
+        print("  season_id       INTEGER,")
+        print("  event_date      TIMESTAMPTZ NOT NULL,")
+        print("  is_home         BOOLEAN NOT NULL DEFAULT true,")
+        print("  team_score      INTEGER,")
+        print("  opponent_score  INTEGER,")
+        print("  result          TEXT,")
+        print("  possession      INTEGER,")
+        print("  shots           INTEGER,")
+        print("  shots_on_target INTEGER,")
+        print("  xg              FLOAT8,")
+        print("  corners         INTEGER,")
+        print("  yellow_cards    INTEGER,")
+        print("  red_cards       INTEGER,")
+        print("  pass_accuracy   FLOAT8,")
+        print("  big_chances     INTEGER,")
+        print("  fetched_at      TIMESTAMPTZ DEFAULT NOW(),")
+        print("  UNIQUE (team_id, event_id)")
+        print(");")
+        print("CREATE INDEX IF NOT EXISTS idx_team_form_team_date ON team_form (team_id, event_date DESC);")
         print()
         print("NOTIFY pgrst, 'reload schema';")
         print()
@@ -1263,6 +1508,11 @@ def main():
 
     if args.verify_coaches:
         verify_coaches()
+        return
+
+    if args.populate_form:
+        n = populate_team_form()
+        print(f'\nDone — {n} team_form row(s) upserted.')
         return
 
     if args.serve:

@@ -65,6 +65,27 @@ export interface UpcomingMatch {
   venueCity: string
 }
 
+export interface TeamFormRow {
+  id:            number
+  opponent:      string
+  opponentId:    number | null
+  competition:   string
+  isHome:        boolean
+  eventDate:     string
+  result:        string | null
+  teamScore:     number | null
+  opponentScore: number | null
+  possession:    number | null
+  shots:         number | null
+  shotsOn:       number | null
+  xg:            number | null
+  corners:       number | null
+  yellowCards:   number | null
+  redCards:      number | null
+  passAccuracy:  number | null
+  bigChances:    number | null
+}
+
 export interface TeamDesignProps {
   teamId: number
   teamName: string
@@ -81,6 +102,7 @@ export interface TeamDesignProps {
   awayKitColor: string | null
   matchStatRows: MatchStatRow[]
   upcomingMatches: UpcomingMatch[]
+  teamForm: TeamFormRow[]
 }
 
 function ordinal(n: number) {
@@ -93,6 +115,21 @@ function resultColor(r: 'W' | 'D' | 'L') {
 
 const POS_LABELS: Record<string, string> = { G: 'GOALKEEPERS', D: 'DEFENDERS', M: 'MIDFIELDERS', F: 'FORWARDS' }
 const POS_COLOR:  Record<string, string> = { G: '#f59e0b',    D: '#3b82f6',   M: '#8b5cf6',     F: '#ef4444'  }
+
+function compBadge(competition: string): string {
+  const c = competition.toLowerCase()
+  if (c.includes('world cup 2026'))   return 'WC 26'
+  if (c.includes('world cup 2022'))   return 'WC 22'
+  if (c.includes('world cup 2018'))   return 'WC 18'
+  if (c.includes('world cup 2014'))   return 'WC 14'
+  if (c.includes('world cup'))        return 'WC'
+  if (c.includes('gold cup 2025'))    return 'GC 25'
+  if (c.includes('gold cup 2024'))    return 'GC 24'
+  if (c.includes('gold cup'))         return 'GC'
+  if (c.includes('nations league'))   return 'NL'
+  if (c.includes('friendly'))         return 'FRI'
+  return competition.slice(0, 5).toUpperCase()
+}
 
 export default function TeamDesignTabs(p: TeamDesignProps) {
   const accent = p.homeKitColor ? `#${p.homeKitColor}` : '#e8c23a'
@@ -331,6 +368,94 @@ export default function TeamDesignTabs(p: TeamDesignProps) {
           </div>
           <div style={{ fontSize: 9, color: '#666', marginTop: 12, letterSpacing: 1 }}>
             POSS = Possession · ON TGT = Shots on Target · xG = Expected Goals · YC = Yellow Cards · RC = Red Cards · PASS% = Pass Accuracy · CHANCES = Big Chances
+          </div>
+        </div>
+      )}
+
+      {/* ── LAST 10 MATCHES (all competitions) ── */}
+      {p.teamForm.length > 0 && (
+        <div style={{ background: '#0d0d0d', borderTop: `3px solid ${accent}`, borderBottom: `3px solid ${accent}`, padding: 24 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, letterSpacing: 3, color: accent, marginBottom: 16 }}>LAST 10 MATCHES</div>
+          <div className={fadeStyles.fadeWrap} style={{ '--fade-bg': '#0d0d0d' } as React.CSSProperties}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 680 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #1e1e1e' }}>
+                  {['MATCH', 'SCORE', 'POSS%', 'SHOTS', 'ON TGT', 'xG', 'CORNERS', 'YC', 'RC', 'PASS%', 'CHANCES'].map(h => (
+                    <th key={h} style={{ padding: '6px 10px', textAlign: h === 'MATCH' ? 'left' : 'center', fontSize: 9, letterSpacing: 2, color: '#777', fontWeight: 400, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {p.teamForm.map(row => {
+                  const rc  = row.result === 'W' ? '#22c55e' : row.result === 'L' ? '#ef4444' : row.result === 'D' ? '#f59e0b' : '#555'
+                  const fmt = (v: number | null, decimals = 0) => v === null ? '—' : decimals ? v.toFixed(decimals) : String(v)
+                  const dateStr = new Date(row.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  const badge   = compBadge(row.competition)
+                  const isWC26  = row.competition.toLowerCase().includes('world cup 2026')
+                  return (
+                    <tr key={`${row.id}-${row.isHome}`} style={{ borderBottom: '1px solid #111' }}>
+                      <td style={{ padding: '10px 10px' }}>
+                        {isWC26 ? (
+                          <Link href={`/matches/${row.id}`} style={{ textDecoration: 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ width: 22, height: 22, borderRadius: 4, background: row.result ? `${rc}22` : '#111', border: `1px solid ${rc}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 11, color: rc, flexShrink: 0 }}>{row.result ?? '·'}</div>
+                              <span style={{ fontSize: 8, letterSpacing: 1, color: '#888', background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 3, padding: '2px 5px', flexShrink: 0 }}>{badge}</span>
+                              <FlagImg country={row.opponent} width={16} cdnSize={40} style={{ borderRadius: 1, flexShrink: 0 }} />
+                              <span style={{ color: '#ccc', fontWeight: 500, whiteSpace: 'nowrap' }}>{row.isHome ? 'vs' : '@'} {row.opponent}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: '#777', marginTop: 3, paddingLeft: 30 }}>{dateStr}</div>
+                          </Link>
+                        ) : (
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ width: 22, height: 22, borderRadius: 4, background: row.result ? `${rc}22` : '#111', border: `1px solid ${rc}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 11, color: rc, flexShrink: 0 }}>{row.result ?? '·'}</div>
+                              <span style={{ fontSize: 8, letterSpacing: 1, color: '#888', background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 3, padding: '2px 5px', flexShrink: 0 }}>{badge}</span>
+                              <FlagImg country={row.opponent} width={16} cdnSize={40} style={{ borderRadius: 1, flexShrink: 0 }} />
+                              <span style={{ color: '#ccc', fontWeight: 500, whiteSpace: 'nowrap' }}>{row.isHome ? 'vs' : '@'} {row.opponent}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: '#777', marginTop: 3, paddingLeft: 30 }}>{dateStr}</div>
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 16, color: row.teamScore !== null ? accent : '#555', padding: '10px 10px' }}>
+                        {row.teamScore !== null ? `${row.teamScore}–${row.opponentScore}` : '—'}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '10px 10px' }}>
+                        {row.possession !== null ? (
+                          <div>
+                            <div style={{ color: '#fff' }}>{row.possession}%</div>
+                            <div style={{ height: 3, background: '#1e1e1e', borderRadius: 2, marginTop: 4, width: 40, margin: '4px auto 0' }}>
+                              <div style={{ height: '100%', background: accent, borderRadius: 2, width: `${row.possession}%` }} />
+                            </div>
+                          </div>
+                        ) : '—'}
+                      </td>
+                      <td style={{ textAlign: 'center', color: '#ccc', padding: '10px 10px' }}>{fmt(row.shots)}</td>
+                      <td style={{ textAlign: 'center', color: '#ccc', padding: '10px 10px' }}>{fmt(row.shotsOn)}</td>
+                      <td style={{ textAlign: 'center', color: accent, padding: '10px 10px', fontWeight: 600 }}>{fmt(row.xg, 2)}</td>
+                      <td style={{ textAlign: 'center', color: '#ccc', padding: '10px 10px' }}>{fmt(row.corners)}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 10px' }}>
+                        {row.yellowCards !== null && row.yellowCards > 0
+                          ? <span style={{ display: 'inline-flex', gap: 2 }}>{Array.from({ length: Math.min(row.yellowCards, 3) }).map((_, i) => <span key={i} style={{ display: 'inline-block', width: 9, height: 12, background: '#facc15', borderRadius: 1 }} />)}</span>
+                          : <span style={{ color: '#666' }}>—</span>}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '10px 10px' }}>
+                        {row.redCards !== null && row.redCards > 0
+                          ? <span style={{ display: 'inline-flex', gap: 2 }}>{Array.from({ length: Math.min(row.redCards, 2) }).map((_, i) => <span key={i} style={{ display: 'inline-block', width: 9, height: 12, background: '#ef4444', borderRadius: 1 }} />)}</span>
+                          : <span style={{ color: '#666' }}>—</span>}
+                      </td>
+                      <td style={{ textAlign: 'center', color: '#ccc', padding: '10px 10px' }}>{fmt(row.passAccuracy, 1)}{row.passAccuracy !== null ? '%' : ''}</td>
+                      <td style={{ textAlign: 'center', color: '#ccc', padding: '10px 10px' }}>{fmt(row.bigChances)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          </div>
+          <div style={{ fontSize: 9, color: '#666', marginTop: 12, letterSpacing: 1 }}>
+            WC 26 = World Cup 2026 · GC = Gold Cup · NL = Nations League · FRI = Friendly · POSS = Possession · xG = Expected Goals · PASS% = Pass Accuracy
           </div>
         </div>
       )}
